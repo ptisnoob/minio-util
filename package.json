@@ -10,7 +10,9 @@
   "dependencies": {
     "core-js": "^3.6.5",
     "element-ui": "^2.15.10",
-    "vue": "^2.6.11"
+    "minio": "^7.0.32",
+    "vue": "^2.6.11",
+    "vue-contextmenujs": "^1.4.9"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "~4.5.13",
