@@ -45,7 +45,12 @@
       </el-empty>
       <div v-else class="file-item" v-for="(n, index) in bucketFiles" :key="index">
         <div class="file file-item-object" v-if="n.name" @click.right="rightClickFile = n" @contextmenu.prevent="fileRightMenu">
-          <el-image v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList">
+          <el-image class="img" v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList">
+            <div slot="error" class="image-slot">
+              <i class="el-icon-picture-outline"></i>
+            </div>
+          </el-image>
+          <el-image v-else-if="n.icon" :src="n.icon" lazy>
             <div slot="error" class="image-slot">
               <i class="el-icon-picture-outline"></i>
             </div>
@@ -141,7 +146,7 @@ export default {
     init() {
       if (!this.option) return
       let { endPoint, port, useSSL, accessKey, secretKey } = this.option
-      console.log('endPoint, port, useSSL, accessKey, secretKey', endPoint, port, useSSL, accessKey, secretKey)
+      // console.log('endPoint, port, useSSL, accessKey, secretKey', endPoint, port, useSSL, accessKey, secretKey)
       this.connectFailed = this.isEmpty(endPoint) || this.isEmpty(accessKey) || this.isEmpty(secretKey)
       if (this.connectFailed) return
       if (port) port = parseInt(port)
@@ -159,7 +164,7 @@ export default {
       this.currentPath = ''
       this.activeBucket = name
       this.getFileList(name)
-      console.log('name', typeof this.getPolicyCallBack)
+      // console.log('name', typeof this.getPolicyCallBack)
     },
     showMenu(path) {
       this.currentPath += path
@@ -168,7 +173,7 @@ export default {
     getBucketList() {
       this.minioClient.listBuckets((err, buckets) => {
         if (err) return console.log(err)
-        console.log('buckets :', buckets)
+        // console.log('buckets :', buckets)
         this.buckets = buckets
       })
     },
@@ -190,13 +195,20 @@ export default {
         if (obj.name) {
           let name = obj.name.split('/')
           let split = obj.name.split('.')
-          if (imgPrefix.indexOf(split[split.length - 1]) > -1) {
+          const sub = split[split.length - 1]
+          if (imgPrefix.indexOf(sub) > -1) {
             let imgPath = this.option.endPoint + ':' + this.option.port + '/' + this.activeBucket + '/'
             if (!this.option.endPoint.startsWith('http')) {
               imgPath = (this.option.useSSL ? 'https://' : 'http://') + imgPath
             }
             obj.imgPath = imgPath + obj.name
             this.imgPreviewList.push(obj.imgPath) // 预览列表
+          } else if (sub === 'pdf' || sub === 'PDF') {
+            obj.icon = require('../../assets/pdf.png')
+          } else if (['doc', 'docx'].indexOf(sub) > -1) {
+            obj.icon = require('../../assets/word.png')
+          } else if (['xls', 'xlsx','csv'].indexOf(sub) > -1) {
+            obj.icon = require('../../assets/excel.jpg')
           }
           obj.name = name[name.length - 1]
         } else if (obj.prefix) {
@@ -266,6 +278,7 @@ export default {
         this.createForm.name = ''
         this.createForm.policy = 'public'
         this.createBucketDialogVisible = false
+        this.refreshFiles()
       })
     },
     // 设置bucket 访问策略
@@ -407,6 +420,7 @@ export default {
       this.dropFileIng = false
       e.stopPropagation()
       e.preventDefault() //必填字段
+      this.pageLoading = true
       let fileData = e.dataTransfer.files
       for (let i = 0; i !== fileData.length; i++) {
         const item = fileData[i]
@@ -416,16 +430,29 @@ export default {
           //文件读取成功回调
           const dataUrl = Buffer.from(fr.result) // ArrayBuffer 转成 Buffer对象
           console.log('dataUrl: ', typeof dataUrl)
-          await this.minioClient.putObject(this.activeBucket, this.currentPath + item.name, dataUrl, item.size, {
-            'Content-Type': item.type
+          await this.putObject(item, dataUrl)
+          this.$notify({
+            title: '上传成功',
+            message: `${item.name} 上传成功！`,
+            type: 'success'
           })
           this.refreshFiles()
+          this.pageLoading = false
         }
       }
-      this.$notify({
-        title: '上传成功',
-        message: `${fileData.length}个文件上传成功！`,
-        type: 'success'
+    },
+    putObject(item, dataUrl) {
+      return new Promise((resolve) => {
+        this.minioClient.putObject(
+          this.activeBucket,
+          this.currentPath + item.name,
+          dataUrl,
+          item.size,
+          { 'Content-Type': item.type },
+          () => {
+            resolve()
+          }
+        )
       })
     }
   },
@@ -485,7 +512,7 @@ export default {
   flex-wrap: wrap;
   max-height: calc(100% - 170px);
   overflow: auto;
-  transition: all .3s ease-in-out;
+  transition: all 0.3s ease-in-out;
 }
 .drop-file-ing.file-box::after {
   content: '松开鼠标即可上传';
@@ -539,13 +566,13 @@ export default {
   height: 80px;
   transition: all 0.3s ease-in-out;
 }
-.file-item > .file:hover > .el-image {
+.file-item > .file:hover > .img {
   max-width: 120%;
   width: 120%;
   height: 100%;
 }
 .file-item > .file > i {
-  color: aqua;
+  color: #869583;
 }
 .file-item > .menu > i {
   color: chartreuse;

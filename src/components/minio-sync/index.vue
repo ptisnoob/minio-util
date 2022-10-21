@@ -1,5 +1,5 @@
 <template>
-  <div class="mini-sync">
+  <div class="mini-sync" :style="moreSettingShow ? 'height:300px;' : ''">
     <div class="sync-content">
       <div class="source-form">
         <div class="form-item">
@@ -31,19 +31,40 @@
         </div>
       </div>
     </div>
+    <!-- <el-collapse-transition> -->
+    <div class="sync-condition-form" v-show="moreSettingShow">
+      <condition-form :condition-form="conditionForm" @back="moreSettingShow = false"></condition-form>
+    </div>
+    <!-- </el-collapse-transition> -->
     <div class="sync-progress-box" v-show="isStartSync">
+      <div class="process-text">{{ processCount }}</div>
       {{ processText }}
     </div>
     <div class="button-box">
+      <el-button type="primary" @click="moreSettingShow = true" :loading="isStartSync">高级设置</el-button>
       <el-button type="primary" @click="startSync" :loading="isStartSync">{{ isStartSync ? '正在同步' : '开始同步' }}</el-button>
     </div>
+    <el-dialog :visible.sync="successDialogVisible" append-to-body :close-on-click-modal="false" :close-on-press-escape="false">
+      <el-result icon="success" title="同步完成" :subTitle="`同步完成文件${syncFiles.length}条,失败${errorList.length}条`">
+        <template slot="extra">
+          <div class="error-list" v-if="errorList.length > 0">
+            <span v-for="(n, index) in errorList" :key="index">{{ n.name }}</span>
+          </div>
+          <el-button type="primary" size="medium" @click="closeSuccessDialogVisible">关闭</el-button>
+          <el-button type="primary" size="medium" @click="successDialogVisible = false">继续同步</el-button>
+          <el-button v-if="errorList.length > 0" type="primary" size="medium" @click="syncErrorList">重新同步失败文件</el-button>
+        </template>
+      </el-result>
+    </el-dialog>
   </div>
 </template>
 <script>
 const Minio = require('minio')
 const mime = require('mime')
+import conditionForm from './components/condition'
 export default {
   name: 'minioSync',
+  components: { conditionForm },
   props: {
     clients: {
       type: Array,
@@ -68,7 +89,18 @@ export default {
       },
       syncFiles: [],
       processText: '',
-      isStartSync: false
+      processCount: '',
+      isStartSync: false,
+      successDialogVisible: false,
+      errorList: [],
+      moreSettingShow: false,
+      conditionForm: {
+        key: [],
+        keyAnd: true,
+        noKey: [],
+        noKyeAnd: true,
+        cover: true
+      }
     }
   },
   methods: {
@@ -99,44 +131,81 @@ export default {
         })
     },
     startSync() {
-      this.$confirm('是否要继续同步？', '提示')
+      this.$confirm('是否要开始同步？', '提示')
         .then(() => {
-          console.log('点击了确定')
           if (this.source.bucketName === '' || this.source.bucketName === '') return this.$message.error('请先选择要同步的对象')
           this.isStartSync = true
+          this.syncFiles = []
           const stream = this.source.client.listObjects(this.source.bucketName, '', true)
-          stream.on('data', (obj) => {
+          stream.on('data', async (obj) => {
             this.processText = `正在读取文件列表，${obj.name}`
-            this.syncFiles.push(obj)
+            let match = true
+            // const path = obj.name.split('/')
+            const fileName = obj.name // path[path.length - 1]
+            if (this.conditionForm.key.length > 0) {
+              if (this.conditionForm.keyAnd) {
+                match = !this.conditionForm.key.some((i) => fileName.indexOf(i) === -1) //与 只要有一个不符合
+              } else {
+                match = this.conditionForm.key.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
+              }
+            }
+
+            if (match && this.conditionForm.noKey.length > 0) {
+              match = !this.conditionForm.noKey.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
+            }
+
+            if (match && !this.conditionForm.cover) {
+              match = !(await this.isExists(obj.name))
+              console.log('isExists', match)
+            }
+            if (match) this.syncFiles.push(obj)
           })
           stream.on('end', async () => {
-            console.log('列表读取完成')
-            this.processText = '列表读取完成'
-            for (let index = 0; index < this.syncFiles.length; index++) {
-              const i = this.syncFiles[index]
-              console.log('当前:' + (index + 1) + '/' + this.syncFiles.length)
-              console.log('开始读取' + i.name)
-              this.processText = `正在同步${i.name}` + (index + 1) + '/' + this.syncFiles.length
-              const dataStrean = await this.getObject(i)
-              await this.putObject(i, dataStrean)
-            }
-            this.processText = '同步完成！'
-            this.isStartSync = false
-            this.$notify({
-              title: '同步成功',
-              message: `数据同步完成.${this.source.client.host}/${this.source.bucketName}  -> ${this.target.client.host}/${this.target.bucketName}`,
-              type: 'success'
-            })
-            this.$emit('sync-success', this.target.name)
+            this.syncFile()
           })
         })
         .catch(() => {})
     },
+    syncErrorList() {
+      this.isStartSync = true
+      this.successDialogVisible = false
+      this.syncFiles = this.errorList
+      this.syncFile()
+    },
+    async syncFile() {
+      console.log('列表读取完成')
+      this.errorList = []
+      this.processText = '列表读取完成'
+      for (let index = 0; index < this.syncFiles.length; index++) {
+        const i = this.syncFiles[index]
+        this.processCount = index + 1 + '/' + this.syncFiles.length
+        this.processText = `正在同步${i.name} `
+        const dataStrean = await this.getObject(i)
+        if (!dataStrean) {
+          this.errorList.push(i)
+          continue
+        }
+        await this.putObject(i, dataStrean)
+      }
+      this.processText = '同步完成！'
+      this.isStartSync = false
+      this.successDialogVisible = true
+      this.$emit('sync-success', this.target.name)
+    },
     getObject(i) {
       return new Promise((resolve) => {
-        this.source.client.getObject(this.source.bucketName, i.name, function (err, dataStream) {
-          resolve(dataStream)
-        })
+        try {
+          this.source.client.getObject(this.source.bucketName, i.name, function (err, dataStream) {
+            if (err) {
+              console.log('error getting object')
+              resolve(false)
+            }
+            resolve(dataStream)
+          })
+        } catch (error) {
+          console.log('error catch')
+          resolve(false)
+        }
       })
     },
     putObject(i, dataStream) {
@@ -145,6 +214,14 @@ export default {
         this.target.client.putObject(this.target.bucketName, i.name, dataStream, i.size, { 'Content-Type': type }, () => {
           console.log('上传成功' + i.name + ' Type= ' + type + ' 大小：' + i.size)
           resolve()
+        })
+      })
+    },
+    isExists(i) {
+      return new Promise((resolve) => {
+        this.target.client.statObject(this.target.bucketName, i, (err) => {
+          if (err) resolve(false)
+          resolve(true)
         })
       })
     },
@@ -165,11 +242,20 @@ export default {
       const cloneTarget = this.deepClone(this.target)
       this.source = cloneTarget
       this.target = cloneSource
+    },
+    closeSuccessDialogVisible() {
+      this.successDialogVisible = false
+      this.$emit('close')
     }
   }
 }
 </script>
 <style scoped>
+.mini-sync {
+  position: relative;
+  /* height: 350px; */
+  /* transition: all 0.3s ease-in-out; */
+}
 .sync-content {
   display: flex;
   justify-content: space-evenly;
@@ -187,5 +273,23 @@ export default {
 }
 .form-item {
   margin: 10px 0;
+}
+
+.error-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.error-list > span {
+  color: red;
+  margin: 10px;
+  display: inline-block;
+}
+.sync-condition-form {
+  position: absolute;
+  width: 100%;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #fff;
 }
 </style>

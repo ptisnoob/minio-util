@@ -3,6 +3,14 @@
     <div class="tool-content">
       <el-button type="primary" @click="dialogVisible = true">新增连接</el-button>
       <el-button type="primary" @click="syncDialogVisible = true">数据迁移</el-button>
+      <el-button type="primary" @click="saveClient" v-if="!autoSave">保存连接</el-button>
+      <el-switch
+        v-model="autoSave"
+        active-color="#13ce66"
+        inactive-color="#ff4949"
+        active-text="自动保存服务器"
+        @change="changeAutoSave"
+      ></el-switch>
     </div>
 
     <el-tabs v-model="activeClient" type="card" editable @edit="handleTabsEdit" style="height: 100%">
@@ -54,7 +62,7 @@
 
     <el-dialog title="数据迁移" :visible.sync="syncDialogVisible">
       <template>
-        <minio-sync :clients="clients" @sync-success="syncSuccess"></minio-sync>
+        <minio-sync :clients="clients" @sync-success="syncSuccess" @close="syncDialogVisible=false"></minio-sync>
       </template>
     </el-dialog>
   </div>
@@ -63,6 +71,8 @@
 <script>
 import minioClient from '../components/minio-client'
 import minioSync from '../components/minio-sync'
+import Cache from '@/plugins/cache'
+const cacheKey = 'clients'
 const BaseForm = {
   name: '',
   title: '172.16.7.14',
@@ -82,11 +92,15 @@ export default {
   data() {
     return {
       clients: [],
-      activeClient: 'dd',
+      activeClient: '',
       dialogVisible: false,
       syncDialogVisible: false,
-      form: Object.assign({}, BaseForm)
+      form: Object.assign({}, BaseForm),
+      autoSave: true
     }
+  },
+  mounted() {
+    this.loadCache()
   },
   methods: {
     handleTabsEdit(targetName, action) {
@@ -97,12 +111,14 @@ export default {
         f.forEach((i) => {
           this.clients.splice(this.clients.indexOf(i), 1)
         })
+        if (this.autoSave) this.saveClient()
       }
     },
     addClient() {
       this.form.name = this.generateKey(10)
       this.clients.push(this.form)
       this.activeClient = this.form.name
+      if (this.autoSave) this.saveClient()
       this.resetForm()
       this.dialogVisible = false
     },
@@ -141,6 +157,23 @@ export default {
     },
     syncSuccess(name) {
       console.log('name: ' + name)
+    },
+    saveClient() {
+      Cache.local.setJSON(cacheKey, this.clients)
+      this.$message.success('更新缓存成功！')
+    },
+    loadCache() {
+      const clients = Cache.local.getJSON(cacheKey)
+      const autoSave = Cache.local.getJSON('autoSave')
+      if(autoSave !== undefined) this.autoSave = autoSave
+      console.log('缓存服务器数量', clients.length)
+      if (clients) {
+        this.clients = clients
+        this.activeClient = clients[0].name
+      }
+    },
+    changeAutoSave(val) {
+      Cache.local.setJSON('autoSave', val)
     }
   }
 }
