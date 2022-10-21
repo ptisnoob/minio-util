@@ -1,6 +1,7 @@
 {
   "name": "minio-util",
   "version": "0.1.0",
+  "author": "pt",
   "private": true,
   "scripts": {
     "dev": "vue-cli-service serve",
