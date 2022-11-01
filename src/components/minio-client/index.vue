@@ -30,6 +30,7 @@
           <el-button type="primary" @click="resetSearch">重置搜索</el-button>
           <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
           <el-button type="primary" @click="createMenu">新增目录</el-button>
+          <el-button type="primary" @click="showSelect = !showSelect">{{ showSelect ? '完成选择' : '开启选择' }}</el-button>
         </el-form-item>
         <el-form-item style="float: right" v-show="currentPath !== ''">
           <el-button type="primary" @click="back">返回</el-button>
@@ -94,7 +95,17 @@
     </el-dialog>
 
     <!--  多选操作栏 -->
-    <div class="multiple-choice-box"></div>
+    <div :class="['multiple-choice-box', { show: selectOver }]">
+      <div class="content">
+        <div class="select-tips">已选择{{ selectList.length }}项，可以做如下操作</div>
+        <el-button-group>
+          <el-button type="danger" @click="closeSelectOverDialog('del')">删除</el-button>
+          <el-button type="primary" @click="closeSelectOverDialog('download')">下载</el-button>
+          <el-button type="primary" @click="closeSelectOverDialog('copy')">复制</el-button>
+        </el-button-group>
+        <i class="el-icon-close" @click="closeSelectOverDialog"></i>
+      </div>
+    </div>
   </div>
 </template>
 <script>
@@ -117,6 +128,14 @@ export default {
     option: {
       type: Object,
       required: true
+    }
+  },
+  watch: {
+    showSelect() {
+      if (!this.showSelect) {
+        console.log('选择完成')
+        if (this.selectList.length > 0) this.selectOver = true
+      }
     }
   },
   data() {
@@ -146,7 +165,8 @@ export default {
       dropFileIng: false,
       showSelect: false,
       selectList: [],
-      shiftEnter: false
+      shiftEnter: false,
+      selectOver: false
     }
   },
   methods: {
@@ -180,8 +200,8 @@ export default {
     getBucketList() {
       this.minioClient.listBuckets((err, buckets) => {
         if (err) return console.log(err)
-        // console.log('buckets :', buckets)
         this.buckets = buckets
+        if (this.buckets.length > 0) this.selBucket(this.buckets[0].name)
       })
     },
     removeBucket() {
@@ -353,18 +373,7 @@ export default {
           {
             label: '下载',
             onClick: () => {
-              const el = document.createElement('a')
-              el.style.display = 'none'
-              el.setAttribute('target', '_blank')
-              const url = `${this.option.useSSL ? 'https://' : 'http://'}${this.option.endPoint}:${this.option.port}/${this.activeBucket}/${
-                this.currentPath
-              }${this.rightClickFile.name}`
-              console.log('path=' + url)
-              el.setAttribute('download', this.rightClickFile.name)
-              el.href = url
-              document.body.appendChild(el)
-              el.click()
-              document.body.removeChild(el)
+              this.downFile(this.rightClickFile.name)
             }
           }
         ],
@@ -374,9 +383,11 @@ export default {
         minWidth: 230 // 主菜单最小宽度
       })
     },
-    createMenu() {},
+    createMenu() {
+      this.files.push({ prefix: '新目录/', size: 0 })
+    },
     removeMenu(prefix) {
-      this.$confirm('无法撤回，是否要删除该目录？', '提示')
+      this.$confirm(`无法撤回，是否要删除该目录 ${prefix}?`, '提示')
         .then(() => {
           this.pageLoading = true
           const stream = this.minioClient.listObjects(this.activeBucket, this.currentPath + prefix, true)
@@ -403,7 +414,20 @@ export default {
         })
       })
     },
-    downFile() {},
+    downFile(fileName) {
+      const el = document.createElement('a')
+      el.style.display = 'none'
+      el.setAttribute('target', '_blank')
+      const url = `${this.option.useSSL ? 'https://' : 'http://'}${this.option.endPoint}:${this.option.port}/${this.activeBucket}/${
+        this.currentPath
+      }${fileName}`
+      console.log('path=' + url)
+      el.setAttribute('download', fileName)
+      el.href = url
+      document.body.appendChild(el)
+      el.click()
+      document.body.removeChild(el)
+    },
     initDragUpload() {
       const dropbox = document.getElementById(this.randomId)
       dropbox.addEventListener('drop', this.enentDrop, false)
@@ -422,8 +446,9 @@ export default {
         e.preventDefault()
         this.dropFileIng = true
       })
+
       document.onkeydown = (event) => {
-        if (event.key === 'Control' && !this.showSelect) {
+        if (event.key === 'Control' && !this.showSelect && !this.selectOver) {
           this.showSelect = true
         } else if (event.key === 'Shift' && this.showSelect) {
           this.shiftEnter = true
@@ -432,7 +457,6 @@ export default {
       document.onkeyup = (event) => {
         if (event.key === 'Control') {
           this.showSelect = false
-          this.selectList = []
         } else if (event.key === 'Shift') {
           this.shiftEnter = false
         }
@@ -491,6 +515,25 @@ export default {
         else this.selectList.push(n)
         console.log('触发', index)
       }
+    },
+    closeSelectOverDialog(type) {
+      switch (type) {
+        case 'del':
+          this.selectList.forEach((f) => {
+            if (f.prefix) {
+              this.removeMenu(f.prefix)
+            } else {
+              this.removeFile(this.currentPath + f.name)
+            }
+          })
+          break
+        case 'download':
+          break
+        case 'copy':
+          break
+      }
+      this.selectOver = false
+      this.selectList = []
     }
   },
   mounted() {
@@ -641,5 +684,45 @@ export default {
 }
 .file-item > .menu > i {
   color: chartreuse;
+}
+.multiple-choice-box {
+  position: absolute;
+  width: 0%;
+  height: 0%;
+  left: 0;
+  top: 0;
+  display: flex;
+  transition: all 0.3s ease-in-out;
+  /* align-items: center; */
+  justify-content: center;
+  /* flex-direction: column; */
+  background-color: #0000005e;
+  color: #000000;
+  font-size: 18px;
+  overflow: hidden;
+}
+.show.multiple-choice-box {
+  width: 100%;
+  height: 100%;
+}
+.show.multiple-choice-box .content {
+  top: 150px;
+}
+.multiple-choice-box .content {
+  width: 300px;
+  transition: top 0.3s ease-in-out;
+  height: 200px;
+  text-align: center;
+  background-color: #ffffff;
+  border: 1px solid #ececec;
+  line-height: 100px;
+  position: absolute;
+  top: -100%;
+}
+.multiple-choice-box .content .el-icon-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  cursor: pointer;
 }
 </style>
