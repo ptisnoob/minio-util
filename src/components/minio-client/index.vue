@@ -29,11 +29,16 @@
         <el-form-item>
           <el-button type="primary" @click="resetSearch">重置搜索</el-button>
           <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
-          <el-button type="primary" @click="createMenu">新增目录</el-button>
           <el-button type="primary" @click="showSelect = !showSelect">{{ showSelect ? '完成选择' : '开启选择' }}</el-button>
+          <el-button type="primary" plain @click="paste">粘贴</el-button>
+          <el-button type="primary" plain @click="createMenu">新增目录</el-button>
         </el-form-item>
         <el-form-item style="float: right" v-show="currentPath !== ''">
           <el-button type="primary" @click="back">返回</el-button>
+        </el-form-item>
+        <el-form-item class="tj-data">
+          总数: <span>{{ files.length }}</span> ,文件数量:<span>{{ files.filter((i) => i.name !== undefined).length }}</span>
+          ,目录数量:<span>{{ files.filter((i) => i.name === undefined).length }}</span>
         </el-form-item>
       </el-form>
     </div>
@@ -44,37 +49,21 @@
       <el-empty v-if="bucketFiles.length === 0">
         <el-button type="primary">上传文件</el-button>
       </el-empty>
-      <div v-else :class="['file-item', { 'is-select': selectList.indexOf(n) > -1 }]" v-for="(n, index) in bucketFiles" :key="index">
-        <div class="file file-item-object" v-if="n.name" @click.right="rightClickFile = n" @contextmenu.prevent="fileRightMenu">
-          <el-image class="img" v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList">
-            <div slot="error" class="image-slot">
-              <i class="el-icon-picture-outline"></i>
-            </div>
-          </el-image>
-          <el-image v-else-if="n.icon" :src="n.icon" lazy>
-            <div slot="error" class="image-slot">
-              <i class="el-icon-picture-outline"></i>
-            </div>
-          </el-image>
-          <i v-else class="el-icon-document"></i>
-          <span class="file-name">
-            <a href="javascript:void(0)" :title="n.name"> {{ n.name }}</a>
-          </span>
-        </div>
-        <div
-          class="menu file-item-object"
-          v-else-if="n.prefix"
-          @click="showMenu(n.prefix)"
-          @click.right="rightClickMenu = n"
-          @contextmenu.prevent="menuRightMenu"
-        >
-          <i class="el-icon-folder-opened"></i>
-          <span class="file-name">
-            <a href="javascript:void(0)" :title="n.prefix"> {{ n.prefix }}</a></span
-          >
-        </div>
-        <div class="mask" @click="selItem($event, n, index)"></div>
-      </div>
+      <file-item
+        v-else
+        :class="{ 'is-select': selectList.indexOf(n) > -1 }"
+        v-for="(n, index) in bucketFiles"
+        :key="index"
+        :n="n"
+        :imgPreviewList="imgPreviewList"
+        @selItem="selItem(n, index)"
+        @delMenu="removeMenu(n.prefix)"
+        @downLoadMenu="downMenu(n.prefix)"
+        @showMenu="showMenu(n.prefix)"
+        @delFile="removeFile(currentPath + n.name)"
+        @downLoadFile="downFile(n.name)"
+        @rename="rename"
+      ></file-item>
     </div>
 
     <el-dialog title="新建Bucket" :visible.sync="createBucketDialogVisible">
@@ -109,8 +98,9 @@
   </div>
 </template>
 <script>
+import fileItem from './components/fileItem'
 const Minio = require('minio')
-// const mime = require('mime')
+const mime = require('mime')
 const imgPrefix = ['png', 'jpg', 'gif', 'jpeg', 'jfif']
 const bucketPolicy = [
   {
@@ -124,6 +114,7 @@ const bucketPolicy = [
 ]
 export default {
   name: 'minioClient',
+  components: { fileItem },
   props: {
     option: {
       type: Object,
@@ -152,9 +143,7 @@ export default {
       bucketFiles: [],
       currentPath: '',
       imgPreviewList: [],
-      rightClickFile: null,
       rightClickBucket: null,
-      rightClickMenu: null,
       createBucketDialogVisible: false,
       createForm: {
         name: '',
@@ -215,6 +204,7 @@ export default {
       })
     },
     getFileList(name, path) {
+      this.pageLoading = true
       this.files = []
       this.imgPreviewList = []
       const stream = this.minioClient.listObjects(name, path || '')
@@ -230,13 +220,8 @@ export default {
             }
             obj.imgPath = imgPath + obj.name
             this.imgPreviewList.push(obj.imgPath) // 预览列表
-          } else if (sub === 'pdf' || sub === 'PDF') {
-            obj.icon = require('../../assets/pdf.png')
-          } else if (['doc', 'docx'].indexOf(sub) > -1) {
-            obj.icon = require('../../assets/word.png')
-          } else if (['xls', 'xlsx', 'csv'].indexOf(sub) > -1) {
-            obj.icon = require('../../assets/excel.jpg')
           }
+          obj.sub = sub
           obj.name = name[name.length - 1]
         } else if (obj.prefix) {
           let path = obj.prefix.split('/')
@@ -246,6 +231,7 @@ export default {
       })
       stream.on('end', () => {
         this.bucketFiles = this.files
+        this.pageLoading = false
       })
     },
     search() {
@@ -333,58 +319,9 @@ export default {
       const err = await this.minioClient.setBucketPolicy(name, JSON.stringify(template))
       if (err) console.log('err', err)
     },
-    menuRightMenu(event) {
-      this.$contextmenu({
-        items: [
-          {
-            label: '删除',
-            onClick: () => {
-              this.removeMenu(this.rightClickMenu.prefix)
-            }
-          },
-          {
-            label: '下载',
-            onClick: () => {
-              this.downMenu()
-            }
-          }
-        ],
-        event, // 鼠标事件信息
-        customClass: 'custom-class', // 自定义菜单 class
-        zIndex: 3, // 菜单样式 z-index
-        minWidth: 230 // 主菜单最小宽度
-      })
-    },
-    fileRightMenu(event) {
-      this.$contextmenu({
-        items: [
-          {
-            label: '删除',
-            onClick: async () => {
-              const tag = await this.removeFile(this.currentPath + this.rightClickFile.name)
-              if (tag) {
-                this.getFileList(this.activeBucket, this.currentPath)
-                this.$message.success('删除成功!')
-                return
-              }
-              this.$message.error('删除失败!')
-            }
-          },
-          {
-            label: '下载',
-            onClick: () => {
-              this.downFile(this.rightClickFile.name)
-            }
-          }
-        ],
-        event, // 鼠标事件信息
-        customClass: 'custom-class', // 自定义菜单 class
-        zIndex: 3, // 菜单样式 z-index
-        minWidth: 230 // 主菜单最小宽度
-      })
-    },
     createMenu() {
-      this.files.push({ prefix: '新目录/', size: 0 })
+      this.files.push({ prefix: '新目录/', size: 0, newMenu: true })
+      this.$message.success('新目录创建成功，请往里面上传文件，空目录将会被删除！')
     },
     removeMenu(prefix) {
       this.$confirm(`无法撤回，是否要删除该目录 ${prefix}?`, '提示')
@@ -410,6 +347,8 @@ export default {
             console.log('删除文件失败。' + fileName, err)
             resolve(false)
           }
+          const index = this.files.findIndex((i) => i.name === fileName)
+          if (index > -1) this.files.splice(index, 1)
           resolve(true)
         })
       })
@@ -501,9 +440,8 @@ export default {
         )
       })
     },
-    selItem(e, n, end) {
+    selItem(n, end) {
       if (this.showSelect) {
-        e.stopPropagation()
         if (this.shiftEnter) {
           const preSelList = this.bucketFiles.slice(0, end + 1)
           console.log('preSelList', preSelList)
@@ -528,12 +466,46 @@ export default {
           })
           break
         case 'download':
+          this.$message.success('正在实现中...')
           break
         case 'copy':
+          this.$message.success('正在实现中...')
           break
       }
       this.selectOver = false
       this.selectList = []
+    },
+    getObject(name) {
+      return new Promise((resolve) => {
+        try {
+          this.minioClient.getObject(this.activeBucket, this.currentPath + name, function (err, dataStream) {
+            if (err) {
+              console.log('error getting object')
+              resolve(false)
+            }
+            resolve(dataStream)
+          })
+        } catch (error) {
+          console.log('error catch')
+          resolve(false)
+        }
+      })
+    },
+    rename({ old, newName }) {
+      this.$confirm('是否要重命名该文件？', '提示')
+        .then(async () => {
+          console.log('name', old, newName)
+          const dataStrean = await this.getObject(old)
+          let type = mime.getType(newName)
+          this.minioClient.putObject(this.activeBucket, this.currentPath + newName, dataStrean, { 'Content-Type': type }, async () => {
+            await this.removeFile(old)
+            this.refreshFiles()
+          })
+        })
+        .catch(() => {})
+    },
+    paste() {
+      this.$message.success('正在实现中...')
     }
   },
   mounted() {
@@ -590,7 +562,15 @@ export default {
   color: #333333;
   font-weight: 600;
 }
-
+.tool-box .tj-data {
+  margin-right: 10px;
+  float: right;
+}
+.tool-box .tj-data span {
+  color: #2196f3;
+  font-weight: 600;
+  font-size: 18px;
+}
 .file-box {
   display: flex;
   flex-wrap: wrap;
@@ -599,26 +579,7 @@ export default {
   transition: all 0.3s ease-in-out;
   position: relative;
 }
-.file-item .mask {
-  position: absolute;
-  background: #cecece70;
-  width: 100%;
-  height: 100%;
-  left: -200%;
-  top: -200%;
-  z-index: 10;
-  transition: all 0.2s ease-in-out;
-  cursor: pointer;
-  /* border: 1px solid red; */
-}
-.show-select .mask {
-  left: 0;
-  top: 0;
-}
-.file-item.is-select {
-  background: #4fa8f0;
-  color: #fff;
-}
+
 .drop-file-ing.file-box::after {
   content: '松开鼠标即可上传';
   width: 100%;
@@ -635,56 +596,7 @@ export default {
   font-weight: 600;
   border: 2px solid #6adbab;
 }
-.file-item {
-  width: 10%;
-  height: 100px;
-  margin: 10px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.2s ease-in-out;
-}
-.file-item-object {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  font-weight: 600;
-  cursor: pointer;
-  overflow: hidden;
-}
-.file-item-object > .file-name {
-  display: inline-block;
-  width: 95%;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.file-item-object > .file-name > a {
-  text-decoration: none;
-  color: unset;
-}
-.file-item-object i {
-  font-size: 80px;
-}
-.file-item > .file > .el-image {
-  max-width: 80%;
-  flex-shrink: 0;
-  height: 80px;
-  transition: all 0.3s ease-in-out;
-}
-.file-item > .file:hover > .img {
-  max-width: 120%;
-  width: 120%;
-  height: 100%;
-}
-.file-item > .file > i {
-  color: #869583;
-}
-.file-item > .menu > i {
-  color: chartreuse;
-}
+
 .multiple-choice-box {
   position: absolute;
   width: 0%;
