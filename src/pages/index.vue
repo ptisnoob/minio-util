@@ -8,7 +8,7 @@
         v-model="autoSave"
         active-color="#13ce66"
         inactive-color="#ff4949"
-        active-text="自动保存服务器"
+        active-text="自动保存配置"
         @change="changeAutoSave"
       ></el-switch>
     </div>

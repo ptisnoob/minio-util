@@ -39,11 +39,11 @@
     <div class="current-path">
       当前路径：<span> {{ activeBucket }}</span> / <span>{{ currentPath }}</span>
     </div>
-    <div :class="['file-box', { 'drop-file-ing': dropFileIng }]" :id="randomId">
+    <div :class="['file-box', { 'drop-file-ing': dropFileIng, 'show-select': showSelect }]" :id="randomId">
       <el-empty v-if="bucketFiles.length === 0">
         <el-button type="primary">上传文件</el-button>
       </el-empty>
-      <div v-else class="file-item" v-for="(n, index) in bucketFiles" :key="index">
+      <div v-else :class="['file-item', { 'is-select': selectList.indexOf(n) > -1 }]" v-for="(n, index) in bucketFiles" :key="index">
         <div class="file file-item-object" v-if="n.name" @click.right="rightClickFile = n" @contextmenu.prevent="fileRightMenu">
           <el-image class="img" v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList">
             <div slot="error" class="image-slot">
@@ -72,6 +72,7 @@
             <a href="javascript:void(0)" :title="n.prefix"> {{ n.prefix }}</a></span
           >
         </div>
+        <div class="mask" @click="selItem($event, n, index)"></div>
       </div>
     </div>
 
@@ -91,6 +92,9 @@
         <el-button type="primary" @click="createBucket">确 定</el-button>
       </div>
     </el-dialog>
+
+    <!--  多选操作栏 -->
+    <div class="multiple-choice-box"></div>
   </div>
 </template>
 <script>
@@ -139,7 +143,10 @@ export default {
       },
       bucketPolicy,
       files: [],
-      dropFileIng: false
+      dropFileIng: false,
+      showSelect: false,
+      selectList: [],
+      shiftEnter: false
     }
   },
   methods: {
@@ -207,7 +214,7 @@ export default {
             obj.icon = require('../../assets/pdf.png')
           } else if (['doc', 'docx'].indexOf(sub) > -1) {
             obj.icon = require('../../assets/word.png')
-          } else if (['xls', 'xlsx','csv'].indexOf(sub) > -1) {
+          } else if (['xls', 'xlsx', 'csv'].indexOf(sub) > -1) {
             obj.icon = require('../../assets/excel.jpg')
           }
           obj.name = name[name.length - 1]
@@ -415,6 +422,21 @@ export default {
         e.preventDefault()
         this.dropFileIng = true
       })
+      document.onkeydown = (event) => {
+        if (event.key === 'Control' && !this.showSelect) {
+          this.showSelect = true
+        } else if (event.key === 'Shift' && this.showSelect) {
+          this.shiftEnter = true
+        }
+      }
+      document.onkeyup = (event) => {
+        if (event.key === 'Control') {
+          this.showSelect = false
+          this.selectList = []
+        } else if (event.key === 'Shift') {
+          this.shiftEnter = false
+        }
+      }
     },
     enentDrop(e) {
       this.dropFileIng = false
@@ -454,6 +476,21 @@ export default {
           }
         )
       })
+    },
+    selItem(e, n, end) {
+      if (this.showSelect) {
+        e.stopPropagation()
+        if (this.shiftEnter) {
+          const preSelList = this.bucketFiles.slice(0, end + 1)
+          console.log('preSelList', preSelList)
+          this.selectList.push(...preSelList.filter((i) => this.selectList.indexOf(i) === -1))
+          return
+        }
+        let index = this.selectList.indexOf(n)
+        if (index > -1) this.selectList.splice(index, 1)
+        else this.selectList.push(n)
+        console.log('触发', index)
+      }
     }
   },
   mounted() {
@@ -465,6 +502,10 @@ export default {
 }
 </script>
 <style scoped>
+.client-box {
+  user-select: none;
+}
+
 .color-primary {
   color: #66b1ff;
 }
@@ -513,6 +554,27 @@ export default {
   max-height: calc(100% - 170px);
   overflow: auto;
   transition: all 0.3s ease-in-out;
+  position: relative;
+}
+.file-item .mask {
+  position: absolute;
+  background: #cecece70;
+  width: 100%;
+  height: 100%;
+  left: -200%;
+  top: -200%;
+  z-index: 10;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  /* border: 1px solid red; */
+}
+.show-select .mask {
+  left: 0;
+  top: 0;
+}
+.file-item.is-select {
+  background: #4fa8f0;
+  color: #fff;
 }
 .drop-file-ing.file-box::after {
   content: '松开鼠标即可上传';
@@ -534,6 +596,9 @@ export default {
   width: 10%;
   height: 100px;
   margin: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease-in-out;
 }
 .file-item-object {
   display: flex;
