@@ -212,7 +212,7 @@ export default {
         if (obj.name) {
           let name = obj.name.split('/')
           let split = obj.name.split('.')
-          const sub = split[split.length - 1]
+          const sub = split[split.length - 1].toLocaleLowerCase()
           if (imgPrefix.indexOf(sub) > -1) {
             let imgPath = this.option.endPoint + ':' + this.option.port + '/' + this.activeBucket + '/'
             if (!this.option.endPoint.startsWith('http')) {
