@@ -31,7 +31,7 @@
           <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
           <el-button type="primary" @click="showSelect = !showSelect">{{ showSelect ? '完成选择' : '开启选择' }}</el-button>
           <el-button type="primary" v-show="showSelect" plain @click="selectList = bucketFiles">全选</el-button>
-          <el-button type="primary" plain @click="paste">粘贴</el-button>
+          <el-button type="primary" v-show="clipboard.length > 0" plain @click="paste">粘贴</el-button>
           <el-button type="primary" plain @click="createMenu">新增目录</el-button>
         </el-form-item>
         <el-form-item style="float: right" v-show="currentPath !== ''">
@@ -55,14 +55,16 @@
         :class="{ 'is-select': selectList.indexOf(n) > -1 }"
         v-for="(n, index) in bucketFiles"
         :key="index"
+        :host="host"
+        :path="path"
         :n="n"
+        :minioClient="minioClient"
         :imgPreviewList="imgPreviewList"
         @selItem="selItem(n, index)"
         @delMenu="removeMenu(n.prefix)"
         @downLoadMenu="downMenu(n.prefix)"
         @showMenu="showMenu(n.prefix)"
         @delFile="removeFile(currentPath + n.name)"
-        @downLoadFile="downFile(n.name)"
         @rename="rename"
       ></file-item>
     </div>
@@ -128,6 +130,17 @@ export default {
         console.log('选择完成')
         if (this.selectList.length > 0) this.selectOver = true
       }
+    }
+  },
+  computed: {
+    host() {
+      return `${this.option.useSSL ? 'https://' : 'http://'}${this.option.endPoint}:${this.option.port}`
+    },
+    path() {
+      return `${this.activeBucket}/${this.currentPath}`
+    },
+    clipboard() {
+      return this.$store.getters.clipboard
     }
   },
   data() {
@@ -337,15 +350,9 @@ export default {
         .catch(() => {})
     },
     removeMenuFiles(prefix) {
-      return new Promise((resolve) => {
-        const stream = this.minioClient.listObjects(this.activeBucket, this.currentPath + prefix, true)
-        stream.on('data', (obj) => {
-          this.removeFile(obj.name)
-          console.log('删除' + obj.name)
-        })
-        stream.on('end', () => {
-          resolve(true)
-        })
+      return this.$minio.getList(this.minioClient, this.activeBucket, this.currentPath + prefix, true, (obj) => {
+        this.removeFile(obj.name)
+        console.log('删除' + obj.name)
       })
     },
     downMenu() {},
@@ -361,20 +368,6 @@ export default {
           resolve(true)
         })
       })
-    },
-    downFile(fileName) {
-      const el = document.createElement('a')
-      el.style.display = 'none'
-      el.setAttribute('target', '_blank')
-      const url = `${this.option.useSSL ? 'https://' : 'http://'}${this.option.endPoint}:${this.option.port}/${this.activeBucket}/${
-        this.currentPath
-      }${fileName}`
-      console.log('path=' + url)
-      el.setAttribute('download', fileName)
-      el.href = url
-      document.body.appendChild(el)
-      el.click()
-      document.body.removeChild(el)
     },
     initDragUpload() {
       const dropbox = document.getElementById(this.randomId)
@@ -464,6 +457,7 @@ export default {
       }
     },
     async closeSelectOverDialog(type) {
+      let copyList = []
       switch (type) {
         case 'del':
           for (let i = 0; i < this.selectList.length; i++) {
@@ -486,7 +480,18 @@ export default {
           this.$message.success('正在实现中...')
           break
         case 'copy':
-          this.$message.success('正在实现中...')
+          for (let i = 0; i < this.selectList.length; i++) {
+            const f = this.selectList[i]
+            copyList.push({
+              item: f,
+              bucket: this.activeBucket,
+              path: this.currentPath,
+              client: this.minioClient,
+              menu: f.prefix || false
+            })
+          }
+          this.$store.dispatch('app/toggleClipboard', copyList)
+          this.$message.success('复制成功！')
           break
       }
       this.selectOver = false
@@ -521,8 +526,37 @@ export default {
         })
         .catch(() => {})
     },
-    paste() {
-      this.$message.success('正在实现中...')
+    async paste() {
+      for (let index = 0; index < this.clipboard.length; index++) {
+        const c = this.clipboard[index]
+        if (c.menu) {
+          const exist = this.files.some((f) => f.prefix === c.item.prefix)
+          this.$minio.getList(c.client, c.bucket, c.path + c.item.prefix, true, (obj) => {
+            let name = obj.name.replace(c.path, '')
+            let newName = name
+            if (exist) {
+              newName = 'copy_' + newName
+            }
+            this.pasteOne(c, name, newName)
+          })
+          this.bucketFiles.push({ prefix: exist ? 'copy_' + c.item.prefix : c.item.prefix, size: 0 })
+        } else {
+          let name = c.item.name
+          let newName = name
+          if (this.files.some((f) => f.name === name)) {
+            newName = name.replace(`.${c.item.sub}`, `_copy.${c.item.sub}`)
+          }
+          await this.pasteOne(c, c.item.name, newName, c.item.size)
+          this.bucketFiles.push({ name: newName, sub: c.item.sub, size: c.item.size })
+          // this.refreshFiles()
+        }
+      }
+      this.$message.success('粘贴成功...')
+    },
+    async pasteOne(c, fileName, newName, size) {
+      const data = await this.$minio.get(c.client, c.bucket, c.path, fileName)
+      if (!data) return console.log('error getting object')
+      await this.$minio.put(this.minioClient, this.activeBucket, this.currentPath, newName, data, size)
     }
   },
   mounted() {

@@ -35,9 +35,21 @@ export default {
       type: Object,
       require: true
     },
+    minioClient: {
+      type: Object,
+      require: true
+    },
     imgPreviewList: {
       type: Array,
       default: () => []
+    },
+    host: {
+      type: String,
+      default: ''
+    },
+    path: {
+      type: String,
+      default: ''
     }
   },
   data() {
@@ -66,7 +78,38 @@ export default {
           {
             label: '下载',
             onClick: () => {
-              this.$emit('downLoadFile')
+              const el = document.createElement('a')
+              el.style.display = 'none'
+              el.setAttribute('target', '_blank')
+              const url = `${this.host}/${this.path}${this.n.name}`
+              console.log('path=' + url)
+              el.setAttribute('download', this.n.name)
+              el.href = url
+              document.body.appendChild(el)
+              el.click()
+              document.body.removeChild(el)
+            }
+          },
+          {
+            label: '复制',
+            onClick: () => {
+              const split = this.path.split('/')
+              this.$store.dispatch('app/toggleClipboard', [
+                { item: this.n, bucket: split[0], path: split.slice(1).join('/'), client: this.minioClient }
+              ])
+              this.$message.success('复制成功')
+            }
+          },
+          {
+            label: '复制访问路径',
+            onClick: () => {
+              var aux = document.createElement('input')
+              aux.setAttribute('value', `${this.host}/${this.path}${this.n.name}`)
+              document.body.appendChild(aux)
+              aux.select()
+              document.execCommand('copy')
+              document.body.removeChild(aux)
+              this.$message.success('复制成功!')
             }
           },
           {
@@ -90,6 +133,16 @@ export default {
             label: '删除',
             onClick: () => {
               this.$emit('delMenu')
+            }
+          },
+          {
+            label: '复制',
+            onClick: () => {
+              const split = this.path.split('/')
+              this.$store.dispatch('app/toggleClipboard', [
+                { item: this.n, bucket: split[0], path: split.slice(1).join('/'), client: this.minioClient, menu: true }
+              ])
+              this.$message.success('复制成功')
             }
           },
           {
