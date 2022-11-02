@@ -9,7 +9,7 @@
         <svg-icon icon-class="example" />
       </div>
       <el-button type="primary" @click="dialogVisible = true">新增连接</el-button>
-      <el-button type="primary" @click="syncDialogVisible = true">数据迁移</el-button>
+      <el-button type="primary" @click="syncDialogVisible = true">数据迁移{{ syncBtnText }}</el-button>
       <el-button type="primary" @click="saveClient" v-if="!autoSave">保存连接</el-button>
       <el-switch
         v-model="autoSave"
@@ -69,7 +69,7 @@
 
     <el-dialog title="数据迁移" :visible.sync="syncDialogVisible">
       <template>
-        <minio-sync :clients="clients" @sync-success="syncSuccess" @close="syncDialogVisible = false"></minio-sync>
+        <minio-sync :clients="clients" @sync-success="syncSuccess" @sync-progress="syncProgress" @close="closeSync"></minio-sync>
       </template>
     </el-dialog>
   </div>
@@ -103,7 +103,8 @@ export default {
       dialogVisible: false,
       syncDialogVisible: false,
       form: Object.assign({}, BaseForm),
-      autoSave: true
+      autoSave: true,
+      syncBtnText: ''
     }
   },
   computed: {
@@ -169,6 +170,15 @@ export default {
     },
     syncSuccess(name) {
       console.log('name: ' + name)
+      this.syncBtnText = ''
+    },
+    syncProgress(progress) {
+      this.syncBtnText = progress
+      console.log('progress', progress)
+    },
+    closeSync() {
+      this.syncDialogVisible = false
+      this.syncBtnText = ''
     },
     saveClient() {
       Cache.local.setJSON(cacheKey, this.clients)

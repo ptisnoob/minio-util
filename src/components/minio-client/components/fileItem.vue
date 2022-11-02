@@ -7,12 +7,6 @@
         </div>
       </el-image>
       <svg-icon v-else :icon-class="n.sub.length > 6 ? 'unknown' : n.sub" />
-      <!-- <el-image v-else-if="n.icon" :src="n.icon" lazy>
-        <div slot="error" class="image-slot">
-          <i class="el-icon-picture-outline"></i>
-        </div>
-      </el-image>
-      <i v-else class="el-icon-document"></i> -->
       <span v-if="!rename" class="file-name">
         <a href="javascript:void(0)" :title="n.name"> {{ n.name }}</a>
       </span>
@@ -25,7 +19,6 @@
       @click.right="rightClickMenu = n"
       @contextmenu.prevent="menuRightMenu"
     >
-      <!-- <i class="el-icon-folder-opened"></i> -->
       <svg-icon icon-class="folder" />
       <span class="file-name" v-if="!n.newMenu">
         <a href="javascript:void(0)" :title="n.prefix"> {{ n.prefix }}</a></span

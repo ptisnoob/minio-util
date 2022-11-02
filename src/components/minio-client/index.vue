@@ -2,7 +2,7 @@
   <div
     class="client-box"
     v-loading="pageLoading"
-    element-loading-text="拼命加载中"
+    :element-loading-text="loadingText"
     element-loading-spinner="el-icon-loading"
     element-loading-background="rgba(0, 0, 0, 0.8)"
   >
@@ -30,6 +30,7 @@
           <el-button type="primary" @click="resetSearch">重置搜索</el-button>
           <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
           <el-button type="primary" @click="showSelect = !showSelect">{{ showSelect ? '完成选择' : '开启选择' }}</el-button>
+          <el-button type="primary" v-show="showSelect" plain @click="selectList = bucketFiles">全选</el-button>
           <el-button type="primary" plain @click="paste">粘贴</el-button>
           <el-button type="primary" plain @click="createMenu">新增目录</el-button>
         </el-form-item>
@@ -37,8 +38,8 @@
           <el-button type="primary" @click="back">返回</el-button>
         </el-form-item>
         <el-form-item class="tj-data">
-          总数: <span>{{ files.length }}</span> ,文件数量:<span>{{ files.filter((i) => i.name !== undefined).length }}</span>
-          ,目录数量:<span>{{ files.filter((i) => i.name === undefined).length }}</span>
+          总数: <span>{{ bucketFiles.length }}</span> ,文件数量:<span>{{ bucketFiles.filter((i) => i.name !== undefined).length }}</span>
+          ,目录数量:<span>{{ bucketFiles.filter((i) => i.name === undefined).length }}</span>
         </el-form-item>
       </el-form>
     </div>
@@ -136,6 +137,7 @@ export default {
       },
       randomId: new Date().getTime() + Math.random().toString(36).substr(2),
       pageLoading: false,
+      loadingText: '正在加载中',
       connectFailed: true,
       minioClient: null,
       buckets: [],
@@ -325,19 +327,26 @@ export default {
     },
     removeMenu(prefix) {
       this.$confirm(`无法撤回，是否要删除该目录 ${prefix}?`, '提示')
-        .then(() => {
+        .then(async () => {
           this.pageLoading = true
-          const stream = this.minioClient.listObjects(this.activeBucket, this.currentPath + prefix, true)
-          stream.on('data', (obj) => {
-            this.removeFile(obj.name)
-          })
-          stream.on('end', () => {
-            this.back()
-            this.pageLoading = false
-            this.$message.success('删除目录成功！')
-          })
+          await this.removeMenuFiles(prefix)
+          this.pageLoading = false
+          this.$message.success('删除目录成功！')
+          this.back()
         })
         .catch(() => {})
+    },
+    removeMenuFiles(prefix) {
+      return new Promise((resolve) => {
+        const stream = this.minioClient.listObjects(this.activeBucket, this.currentPath + prefix, true)
+        stream.on('data', (obj) => {
+          this.removeFile(obj.name)
+          console.log('删除' + obj.name)
+        })
+        stream.on('end', () => {
+          resolve(true)
+        })
+      })
     },
     downMenu() {},
     removeFile(fileName) {
@@ -454,16 +463,24 @@ export default {
         console.log('触发', index)
       }
     },
-    closeSelectOverDialog(type) {
+    async closeSelectOverDialog(type) {
       switch (type) {
         case 'del':
-          this.selectList.forEach((f) => {
+          for (let i = 0; i < this.selectList.length; i++) {
+            const f = this.selectList[i]
             if (f.prefix) {
-              this.removeMenu(f.prefix)
+              this.pageLoading = true
+              await this.removeMenuFiles(f.prefix)
+              this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.prefix}`
             } else {
-              this.removeFile(this.currentPath + f.name)
+              this.minioClient.removeObject(this.activeBucket, this.currentPath + f.name)
+              this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.name}`
             }
-          })
+            console.log('删除' + i, this.selectList.length)
+          }
+          console.log('刷新文件')
+          this.refreshFiles()
+          this.$message.success(`删除完成,共删除${this.selectList.length}项`)
           break
         case 'download':
           this.$message.success('正在实现中...')
@@ -599,7 +616,7 @@ export default {
 
 .multiple-choice-box {
   position: absolute;
-  width: 0%;
+  width: 100%;
   height: 0%;
   left: 0;
   top: 0;
@@ -614,22 +631,25 @@ export default {
   overflow: hidden;
 }
 .show.multiple-choice-box {
-  width: 100%;
+  /* width: 100%; */
   height: 100%;
 }
 .show.multiple-choice-box .content {
   top: 150px;
+  /* left: unset; */
 }
 .multiple-choice-box .content {
   width: 300px;
-  transition: top 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out;
   height: 200px;
   text-align: center;
   background-color: #ffffff;
   border: 1px solid #ececec;
   line-height: 100px;
   position: absolute;
-  top: -100%;
+  top: 100%;
+  /* left: -100%; */
+  /* top: 150px; */
 }
 .multiple-choice-box .content .el-icon-close {
   position: absolute;

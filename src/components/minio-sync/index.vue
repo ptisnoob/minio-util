@@ -43,6 +43,8 @@
     <div class="button-box">
       <el-button type="primary" @click="moreSettingShow = true" :loading="isStartSync">高级设置</el-button>
       <el-button type="primary" @click="startSync" :loading="isStartSync">{{ isStartSync ? '正在同步' : '开始同步' }}</el-button>
+      <el-button type="primary" size="medium" v-show="isStartSync" @click="stop">{{ !stopSync ? '暂停' : '继续' }}</el-button>
+      <el-button type="warning" v-show="stopSync" @click="shutDown">结束</el-button>
     </div>
     <el-dialog :visible.sync="successDialogVisible" append-to-body :close-on-click-modal="false" :close-on-press-escape="false">
       <el-result icon="success" title="同步完成" :subTitle="`同步完成文件${syncFiles.length}条,失败${errorList.length}条`">
@@ -61,6 +63,19 @@
 <script>
 const Minio = require('minio')
 const mime = require('mime')
+const BaseClient = {
+  name: '',
+  bucketName: '',
+  bucketOptions: [],
+  client: null
+}
+const ConditionForm = {
+  key: [],
+  keyAnd: true,
+  noKey: [],
+  noKyeAnd: true,
+  cover: true
+}
 import conditionForm from './components/condition'
 export default {
   name: 'minioSync',
@@ -75,18 +90,8 @@ export default {
   },
   data() {
     return {
-      target: {
-        name: '',
-        bucketName: '',
-        bucketOptions: [],
-        client: null
-      },
-      source: {
-        name: '',
-        bucketName: '',
-        bucketOptions: [],
-        client: null
-      },
+      target: Object.assign({}, BaseClient),
+      source: Object.assign({}, BaseClient),
       syncFiles: [],
       processText: '',
       processCount: '',
@@ -94,13 +99,9 @@ export default {
       successDialogVisible: false,
       errorList: [],
       moreSettingShow: false,
-      conditionForm: {
-        key: [],
-        keyAnd: true,
-        noKey: [],
-        noKyeAnd: true,
-        cover: true
-      }
+      conditionForm: Object.assign({}, ConditionForm),
+      stopIndex: 0,
+      stopSync: false
     }
   },
   methods: {
@@ -176,7 +177,11 @@ export default {
       console.log('列表读取完成')
       this.errorList = []
       this.processText = '列表读取完成'
-      for (let index = 0; index < this.syncFiles.length; index++) {
+      for (let index = this.stopIndex; index < this.syncFiles.length; index++) {
+        if (this.stopSync) {
+          this.stopIndex = index
+          return
+        }
         const i = this.syncFiles[index]
         this.processCount = index + 1 + '/' + this.syncFiles.length
         this.processText = `正在同步${i.name} `
@@ -186,11 +191,30 @@ export default {
           continue
         }
         await this.putObject(i, dataStrean)
+        this.$emit('sync-progress', this.processCount)
       }
       this.processText = '同步完成！'
+      this.stopIndex = 0
       this.isStartSync = false
       this.successDialogVisible = true
       this.$emit('sync-success', this.target.name)
+      // this.shutDown()
+    },
+    stop() {
+      this.stopSync = !this.stopSync
+      if (this.stopSync) this.processText = `已暂停`
+      else this.syncFile()
+    },
+    shutDown() {
+      this.stopIndex = 0
+      this.isStartSync = false
+      this.stopSync = false
+      this.syncFiles = []
+      this.target = Object.assign({}, BaseClient)
+      this.source = Object.assign({}, BaseClient)
+      this.conditionForm = Object.assign({}, ConditionForm)
+      this.$emit('close')
+      // this.$emit('sync-success', this.target.name)
     },
     getObject(i) {
       return new Promise((resolve) => {
@@ -245,7 +269,8 @@ export default {
     },
     closeSuccessDialogVisible() {
       this.successDialogVisible = false
-      this.$emit('close')
+      this.shutDown()
+      // this.$emit('close')
     }
   }
 }
