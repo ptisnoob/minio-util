@@ -460,21 +460,22 @@ export default {
       let copyList = []
       switch (type) {
         case 'del':
-          for (let i = 0; i < this.selectList.length; i++) {
-            const f = this.selectList[i]
-            if (f.prefix) {
-              this.pageLoading = true
-              await this.removeMenuFiles(f.prefix)
-              this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.prefix}`
-            } else {
-              this.minioClient.removeObject(this.activeBucket, this.currentPath + f.name)
-              this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.name}`
+          this.$confirm('无法撤销！确定要删除这些文件吗？', '警告').then(async () => {
+            for (let i = 0; i < this.selectList.length; i++) {
+              const f = this.selectList[i]
+              if (f.prefix) {
+                this.pageLoading = true
+                await this.removeMenuFiles(f.prefix)
+                this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.prefix}`
+              } else {
+                this.minioClient.removeObject(this.activeBucket, this.currentPath + f.name)
+                this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.name}`
+              }
             }
-            console.log('删除' + i, this.selectList.length)
-          }
-          console.log('刷新文件')
-          this.refreshFiles()
-          this.$message.success(`删除完成,共删除${this.selectList.length}项`)
+            this.refreshFiles()
+            this.$message.success(`删除完成,共删除${this.selectList.length}项`)
+            this.selectList = []
+          })
           break
         case 'download':
           this.$message.success('正在实现中...')
@@ -491,11 +492,11 @@ export default {
             })
           }
           this.$store.dispatch('app/toggleClipboard', copyList)
-          this.$message.success('复制成功！')
+          this.$message.success('复制成功，可在任意目录进行粘贴！')
+          this.selectList = []
           break
       }
       this.selectOver = false
-      this.selectList = []
     },
     getObject(name) {
       return new Promise((resolve) => {
