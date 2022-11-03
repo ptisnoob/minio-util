@@ -61,8 +61,6 @@
   </div>
 </template>
 <script>
-const Minio = require('minio')
-const mime = require('mime')
 const BaseClient = {
   name: '',
   bucketName: '',
@@ -116,18 +114,9 @@ export default {
       this.clients
         .filter((i) => i.name === n.name)
         .forEach((c) => {
-          let { endPoint, port, useSSL, accessKey, secretKey } = c.option
-          if (port) port = parseInt(port)
-          n.client = new Minio.Client({
-            endPoint: endPoint,
-            port: port,
-            useSSL: useSSL || false,
-            accessKey: accessKey,
-            secretKey: secretKey
-          })
-          n.client.listBuckets((err, buckets) => {
-            if (err) return console.log(err)
-            n.bucketOptions = buckets
+          n.client = this.$minio.createClient(c.option)
+          this.$minio.getBuckets(n.client).then(res=>{
+            n.bucketOptions = res || []
           })
         })
     },
@@ -137,33 +126,29 @@ export default {
           if (this.source.bucketName === '' || this.source.bucketName === '') return this.$message.error('请先选择要同步的对象')
           this.isStartSync = true
           this.syncFiles = []
-          const stream = this.source.client.listObjects(this.source.bucketName, '', true)
-          stream.on('data', async (obj) => {
-            this.processText = `正在读取文件列表，${obj.name}`
-            let match = true
-            // const path = obj.name.split('/')
-            const fileName = obj.name // path[path.length - 1]
-            if (this.conditionForm.key.length > 0) {
-              if (this.conditionForm.keyAnd) {
-                match = !this.conditionForm.key.some((i) => fileName.indexOf(i) === -1) //与 只要有一个不符合
-              } else {
-                match = this.conditionForm.key.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
+          this.$minio
+            .getList(this.source.client, this.source.bucketName, '', true, async (obj) => {
+              this.processText = `正在读取文件列表，${obj.name}`
+              let match = true
+              const fileName = obj.name // path[path.length - 1]
+              if (this.conditionForm.key.length > 0) {
+                if (this.conditionForm.keyAnd) {
+                  match = !this.conditionForm.key.some((i) => fileName.indexOf(i) === -1) //与 只要有一个不符合
+                } else {
+                  match = this.conditionForm.key.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
+                }
               }
-            }
-
-            if (match && this.conditionForm.noKey.length > 0) {
-              match = !this.conditionForm.noKey.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
-            }
-
-            if (match && !this.conditionForm.cover) {
-              match = !(await this.isExists(obj.name))
-              console.log('isExists', match)
-            }
-            if (match) this.syncFiles.push(obj)
-          })
-          stream.on('end', async () => {
-            this.syncFile()
-          })
+              if (match && this.conditionForm.noKey.length > 0) {
+                match = !this.conditionForm.noKey.some((i) => fileName.indexOf(i) > -1) // 或 只要有一个符合
+              }
+              if (match && !this.conditionForm.cover) {
+                match = !(await this.isExists(obj.name))
+              }
+              if (match) this.syncFiles.push(obj)
+            })
+            .then(() => {
+              this.syncFile()
+            })
         })
         .catch(() => {})
     },
@@ -185,12 +170,12 @@ export default {
         const i = this.syncFiles[index]
         this.processCount = index + 1 + '/' + this.syncFiles.length
         this.processText = `正在同步${i.name} `
-        const dataStrean = await this.getObject(i)
+        const dataStrean = await this.$minio.get(this.source.client, this.source.bucketName, '', i.name)
         if (!dataStrean) {
           this.errorList.push(i)
           continue
         }
-        await this.putObject(i, dataStrean)
+        await this.$minio.put(this.target.client, this.target.bucketName, '', i.name, dataStrean, i.size)
         this.$emit('sync-progress', this.processCount)
       }
       this.processText = '同步完成！'
@@ -198,7 +183,6 @@ export default {
       this.isStartSync = false
       this.successDialogVisible = true
       this.$emit('sync-success', this.target.name)
-      // this.shutDown()
     },
     stop() {
       this.stopSync = !this.stopSync
@@ -214,32 +198,6 @@ export default {
       this.source = Object.assign({}, BaseClient)
       this.conditionForm = Object.assign({}, ConditionForm)
       this.$emit('close')
-      // this.$emit('sync-success', this.target.name)
-    },
-    getObject(i) {
-      return new Promise((resolve) => {
-        try {
-          this.source.client.getObject(this.source.bucketName, i.name, function (err, dataStream) {
-            if (err) {
-              console.log('error getting object')
-              resolve(false)
-            }
-            resolve(dataStream)
-          })
-        } catch (error) {
-          console.log('error catch')
-          resolve(false)
-        }
-      })
-    },
-    putObject(i, dataStream) {
-      return new Promise((resolve) => {
-        let type = mime.getType(i.name)
-        this.target.client.putObject(this.target.bucketName, i.name, dataStream, i.size, { 'Content-Type': type }, () => {
-          console.log('上传成功' + i.name + ' Type= ' + type + ' 大小：' + i.size)
-          resolve()
-        })
-      })
     },
     isExists(i) {
       return new Promise((resolve) => {

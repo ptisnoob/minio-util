@@ -3,6 +3,29 @@
  * author pt
  */
 const mime = require('mime')
+const Minio = require('minio')
+
+// 创建对象
+function createClient(option) {
+  this.connectFailed = isEmpty(option.endPoint) || isEmpty(option.accessKey) || isEmpty(option.secretKey)
+  if (this.connectFailed) return false
+  if (option.port) option.port = parseInt(option.port)
+  option.useSSL = option.useSSL || false
+  return new Minio.Client(option)
+}
+
+// 获取buckets
+function getBuckets(client) {
+  return new Promise((resolve) => {
+    client.listBuckets((err, buckets) => {
+      if (err) {
+        // console.log('err', err)
+        resolve(false)
+      }
+      resolve(buckets)
+    })
+  })
+}
 
 // 上传文件
 function put(client, bucket, path, name, data, size, type) {
@@ -31,13 +54,14 @@ function get(client, bucket, path, name) {
 }
 
 // 删除文件
-function del(client, bucket, path, name) {
+function del(client, bucket, path, name, ondel) {
   return new Promise((resolve) => {
     client.removeObject(bucket, path + name, (err) => {
       if (err) {
         console.log('删除文件失败。' + name, err)
         resolve(false)
       }
+      if (ondel) ondel()
       resolve(true)
     })
   })
@@ -60,10 +84,16 @@ function getSub(name, prefix = '.') {
   return split[split.length - 1].toLocaleLowerCase()
 }
 
+function isEmpty(n) {
+  return n === undefined || n === null || n === ''
+}
+
 export default {
   get: get,
   put: put,
   del: del,
   getList: getList,
-  getSub: getSub
+  getSub: getSub,
+  createClient: createClient,
+  getBuckets: getBuckets
 }

@@ -17,29 +17,33 @@
       >
         <span class="bucket-item-title"> {{ n.name }}</span>
       </div>
-      <div class="bucket-item" @click="createBucketDialogVisible = true">
-        <span class="bucket-item-title color-primary"> 新增Bucket</span>
+      <div class="bucket-item" @click="createBucketDialogVisible = true && !isConnectFailed">
+        <span class="bucket-item-title color-error" v-if="isConnectFailed"> 服务器连接失败,请检查配置</span>
+        <span class="bucket-item-title color-primary" v-else> 新增Bucket</span>
       </div>
     </div>
-    <div class="tool-box">
+    <div class="tool-box" v-if="activeBucket">
       <el-form inline :model="searchForm" label-width="auto">
         <el-form-item label="关键字">
           <el-input v-model="searchForm.key" placeholder="请输入关键字进行搜索" @input="search"></el-input>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="resetSearch">重置搜索</el-button>
-          <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
           <el-button type="primary" @click="showSelect = !showSelect">{{ showSelect ? '完成选择' : '开启选择' }}</el-button>
           <el-button type="primary" v-show="showSelect" plain @click="selectList = bucketFiles">全选</el-button>
-          <el-button type="primary" v-show="clipboard.length > 0" plain @click="paste">粘贴</el-button>
           <el-button type="primary" plain @click="createMenu">新增目录</el-button>
         </el-form-item>
-        <el-form-item style="float: right" v-show="currentPath !== ''">
+        <!-- <el-form-item style="float: right" v-show="currentPath !== ''">
           <el-button type="primary" @click="back">返回</el-button>
-        </el-form-item>
+        </el-form-item> -->
         <el-form-item class="tj-data">
           总数: <span>{{ bucketFiles.length }}</span> ,文件数量:<span>{{ bucketFiles.filter((i) => i.name !== undefined).length }}</span>
           ,目录数量:<span>{{ bucketFiles.filter((i) => i.name === undefined).length }}</span>
+        </el-form-item>
+        <el-form-item style="float: right">
+          <el-button type="primary" v-show="clipboard.length > 0" plain @click="paste">粘贴</el-button>
+          <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
+          <el-button type="primary" v-show="currentPath !== ''" @click="back">返回</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -47,9 +51,7 @@
       当前路径：<span> {{ activeBucket }}</span> / <span>{{ currentPath }}</span>
     </div>
     <div :class="['file-box', { 'drop-file-ing': dropFileIng, 'show-select': showSelect }]" :id="randomId">
-      <el-empty v-if="bucketFiles.length === 0">
-        <el-button type="primary">上传文件</el-button>
-      </el-empty>
+      <el-empty v-if="bucketFiles.length === 0" style="flex: 1"> </el-empty>
       <file-item
         v-else
         :class="{ 'is-select': selectList.indexOf(n) > -1 }"
@@ -102,8 +104,7 @@
 </template>
 <script>
 import fileItem from './components/fileItem'
-const Minio = require('minio')
-const mime = require('mime')
+// const Minio = require('minio')
 const imgPrefix = ['png', 'jpg', 'gif', 'jpeg', 'jfif']
 const bucketPolicy = [
   {
@@ -127,7 +128,6 @@ export default {
   watch: {
     showSelect() {
       if (!this.showSelect) {
-        console.log('选择完成')
         if (this.selectList.length > 0) this.selectOver = true
       }
     }
@@ -151,7 +151,7 @@ export default {
       randomId: new Date().getTime() + Math.random().toString(36).substr(2),
       pageLoading: false,
       loadingText: '正在加载中',
-      connectFailed: true,
+      isConnectFailed: true,
       minioClient: null,
       buckets: [],
       activeBucket: '',
@@ -175,38 +175,32 @@ export default {
   },
   methods: {
     init() {
-      if (!this.option) return
-      let { endPoint, port, useSSL, accessKey, secretKey } = this.option
-      // console.log('endPoint, port, useSSL, accessKey, secretKey', endPoint, port, useSSL, accessKey, secretKey)
-      this.connectFailed = this.isEmpty(endPoint) || this.isEmpty(accessKey) || this.isEmpty(secretKey)
-      if (this.connectFailed) return
-      if (port) port = parseInt(port)
-      this.minioClient = new Minio.Client({
-        endPoint: endPoint,
-        port: port,
-        useSSL: useSSL || false,
-        accessKey: accessKey,
-        secretKey: secretKey
+      if (!this.option) return this.connectFailed()
+      this.minioClient = this.$minio.createClient(this.option)
+      console.log('this.minioClient', this.minioClient)
+      if (!this.minioClient) return this.connectFailed()
+      this.$minio.getBuckets(this.minioClient).then((res) => {
+        if (!res) return this.connectFailed()
+        this.isConnectFailed = false
+        this.buckets = res || []
+        if (this.buckets.length > 0) this.selBucket(this.buckets[0].name)
+        this.initDragUpload()
       })
-      this.getBucketList()
+    },
+    connectFailed() {
+      // this.isConnectFailed = true
+      // this.$message.error('服务器连接失败！')
+      this.$emit('connect-error')
     },
     selBucket(name) {
       if (this.activeBucket === name) return
       this.currentPath = ''
       this.activeBucket = name
       this.getFileList(name)
-      // console.log('name', typeof this.getPolicyCallBack)
     },
     showMenu(path) {
       this.currentPath += path
       this.getFileList(this.activeBucket, this.currentPath)
-    },
-    getBucketList() {
-      this.minioClient.listBuckets((err, buckets) => {
-        if (err) return console.log(err)
-        this.buckets = buckets
-        if (this.buckets.length > 0) this.selBucket(this.buckets[0].name)
-      })
     },
     removeBucket() {
       this.$confirm('是否要删除Bucket:' + this.rightClickBucket.name, '提示', { type: 'warning' }).then(() => {
@@ -218,36 +212,36 @@ export default {
         })
       })
     },
-    getFileList(name, path) {
+    getFileList(bkName, path) {
       this.pageLoading = true
       this.files = []
       this.imgPreviewList = []
-      const stream = this.minioClient.listObjects(name, path || '')
-      stream.on('data', (obj) => {
-        if (obj.name) {
-          let name = obj.name.split('/')
-          let split = obj.name.split('.')
-          const sub = split[split.length - 1].toLocaleLowerCase()
-          if (imgPrefix.indexOf(sub) > -1) {
-            let imgPath = this.option.endPoint + ':' + this.option.port + '/' + this.activeBucket + '/'
-            if (!this.option.endPoint.startsWith('http')) {
-              imgPath = (this.option.useSSL ? 'https://' : 'http://') + imgPath
+      this.$minio
+        .getList(this.minioClient, bkName, path, false, (obj) => {
+          if (obj.name) {
+            let name = obj.name.split('/')
+            let split = obj.name.split('.')
+            const sub = split[split.length - 1].toLocaleLowerCase()
+            if (imgPrefix.indexOf(sub) > -1) {
+              let imgPath = this.option.endPoint + ':' + this.option.port + '/' + this.activeBucket + '/'
+              if (!this.option.endPoint.startsWith('http')) {
+                imgPath = (this.option.useSSL ? 'https://' : 'http://') + imgPath
+              }
+              obj.imgPath = imgPath + obj.name
+              this.imgPreviewList.push(obj.imgPath) // 预览列表
             }
-            obj.imgPath = imgPath + obj.name
-            this.imgPreviewList.push(obj.imgPath) // 预览列表
+            obj.sub = sub
+            obj.name = name[name.length - 1]
+          } else if (obj.prefix) {
+            let path = obj.prefix.split('/')
+            obj.prefix = path[path.length - 2] + '/'
           }
-          obj.sub = sub
-          obj.name = name[name.length - 1]
-        } else if (obj.prefix) {
-          let path = obj.prefix.split('/')
-          obj.prefix = path[path.length - 2] + '/'
-        }
-        this.files.push(obj)
-      })
-      stream.on('end', () => {
-        this.bucketFiles = this.files
-        this.pageLoading = false
-      })
+          this.files.push(obj)
+        })
+        .then(() => {
+          this.bucketFiles = this.files
+          this.pageLoading = false
+        })
     },
     search() {
       this.bucketFiles = this.files.filter((b) => {
@@ -258,7 +252,6 @@ export default {
     resetSearch() {
       this.searchForm.key = ''
       this.search()
-      // this.getFileList(this.activeBucket, this.currentPath)
     },
     refreshFiles() {
       this.searchForm.key = ''
@@ -357,16 +350,9 @@ export default {
     },
     downMenu() {},
     removeFile(fileName) {
-      return new Promise((resolve) => {
-        this.minioClient.removeObject(this.activeBucket, fileName, (err) => {
-          if (err) {
-            console.log('删除文件失败。' + fileName, err)
-            resolve(false)
-          }
-          const index = this.files.findIndex((i) => i.name === fileName)
-          if (index > -1) this.files.splice(index, 1)
-          resolve(true)
-        })
+      return this.$minio.del(this.minioClient, this.activeBucket, '', fileName, () => {
+        const index = this.files.findIndex((i) => i.name === fileName)
+        if (index > -1) this.files.splice(index, 1)
       })
     },
     initDragUpload() {
@@ -429,31 +415,18 @@ export default {
       }
     },
     putObject(item, dataUrl) {
-      return new Promise((resolve) => {
-        this.minioClient.putObject(
-          this.activeBucket,
-          this.currentPath + item.name,
-          dataUrl,
-          item.size,
-          { 'Content-Type': item.type },
-          () => {
-            resolve()
-          }
-        )
-      })
+      return this.$minio.put(this.minioClient, this.activeBucket, this.currentPath, item.name, dataUrl, item.size, item.type)
     },
     selItem(n, end) {
       if (this.showSelect) {
         if (this.shiftEnter) {
           const preSelList = this.bucketFiles.slice(0, end + 1)
-          console.log('preSelList', preSelList)
           this.selectList.push(...preSelList.filter((i) => this.selectList.indexOf(i) === -1))
           return
         }
         let index = this.selectList.indexOf(n)
         if (index > -1) this.selectList.splice(index, 1)
         else this.selectList.push(n)
-        console.log('触发', index)
       }
     },
     async closeSelectOverDialog(type) {
@@ -468,7 +441,7 @@ export default {
                 await this.removeMenuFiles(f.prefix)
                 this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.prefix}`
               } else {
-                this.minioClient.removeObject(this.activeBucket, this.currentPath + f.name)
+                await this.$minio.del(this.minioClient, this.activeBucket, this.currentPath, f.name)
                 this.loadingText = `正在删除第${i}/${this.selectList.length}项:${f.name}`
               }
             }
@@ -479,6 +452,7 @@ export default {
           break
         case 'download':
           this.$message.success('正在实现中...')
+          this.selectList = []
           break
         case 'copy':
           for (let i = 0; i < this.selectList.length; i++) {
@@ -495,35 +469,21 @@ export default {
           this.$message.success('复制成功，可在任意目录进行粘贴！')
           this.selectList = []
           break
+        default:
+          this.selectList = []
       }
       this.selectOver = false
     },
     getObject(name) {
-      return new Promise((resolve) => {
-        try {
-          this.minioClient.getObject(this.activeBucket, this.currentPath + name, function (err, dataStream) {
-            if (err) {
-              console.log('error getting object')
-              resolve(false)
-            }
-            resolve(dataStream)
-          })
-        } catch (error) {
-          console.log('error catch')
-          resolve(false)
-        }
-      })
+      return this.$minio.get(this.minioClient, this.activeBucket, this.currentPath, name)
     },
     rename({ old, newName }) {
       this.$confirm('是否要重命名该文件？', '提示')
         .then(async () => {
-          console.log('name', old, newName)
           const dataStrean = await this.getObject(old)
-          let type = mime.getType(newName)
-          this.minioClient.putObject(this.activeBucket, this.currentPath + newName, dataStrean, { 'Content-Type': type }, async () => {
-            await this.removeFile(old)
-            this.refreshFiles()
-          })
+          await this.putObject({ name: newName }, dataStrean)
+          await this.removeFile(old)
+          this.refreshFiles()
         })
         .catch(() => {})
     },
@@ -535,9 +495,7 @@ export default {
           this.$minio.getList(c.client, c.bucket, c.path + c.item.prefix, true, (obj) => {
             let name = obj.name.replace(c.path, '')
             let newName = name
-            if (exist) {
-              newName = 'copy_' + newName
-            }
+            if (exist) newName = 'copy_' + newName
             this.pasteOne(c, name, newName)
           })
           this.bucketFiles.push({ prefix: exist ? 'copy_' + c.item.prefix : c.item.prefix, size: 0 })
@@ -559,9 +517,6 @@ export default {
       if (!data) return console.log('error getting object')
       await this.$minio.put(this.minioClient, this.activeBucket, this.currentPath, newName, data, size)
     }
-  },
-  mounted() {
-    this.initDragUpload()
   },
   created() {
     this.init()

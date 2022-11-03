@@ -1,7 +1,7 @@
 <template>
-  <div :class="{ 'file-item': true, norename: !rename }">
+  <div class="file-item">
     <div class="file file-item-object" v-if="n.name" @contextmenu.prevent="fileRightMenu">
-      <el-image class="img" v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList">
+      <el-image class="img" v-if="n.imgPath" :src="n.imgPath" lazy :preview-src-list="imgPreviewList" draggable="false">
         <div slot="error" class="image-slot">
           <i class="el-icon-picture-outline"></i>
         </div>
@@ -58,12 +58,6 @@ export default {
       newName: ''
     }
   },
-  //   computed: {
-  //     sub() {
-  //       const split = this.n.name.split('.')
-  //       return split[split.length - 1]
-  //     }
-  //   },
   methods: {
     fileRightMenu(event) {
       this.$contextmenu({
@@ -71,7 +65,6 @@ export default {
           {
             label: '删除',
             onClick: () => {
-              console.log('点击删除')
               this.$emit('delFile')
             }
           },
@@ -229,10 +222,31 @@ export default {
   height: 80px;
   transition: all 0.3s ease-in-out;
 }
-.norename.file-item > .file:hover > .img {
+/* .norename.file-item > .file:hover > .img {
   max-width: 120%;
   width: 120%;
   height: 100%;
+} */
+.file-item > .file > .img::after {
+    content: '点击查看大图';
+    position: absolute;
+    width: 100%;
+    height: 0%;
+    background-color: #000000c4;
+    z-index: 100;
+    left: 0;
+    color: #ffffff;
+    text-align: center;
+    top: 0;
+    pointer-events: none;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease-in-out;
+}
+.file-item > .file:hover > .img::after {
+    height: 100%;
 }
 .file-item > .file > i {
   color: #869583;
