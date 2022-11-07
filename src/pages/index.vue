@@ -82,13 +82,13 @@ import Cache from '@/plugins/cache'
 const cacheKey = 'clients'
 const BaseForm = {
   name: '',
-  title: '172.16.7.14',
+  title: '',
   option: {
-    endPoint: '172.16.7.14',
+    endPoint: '',
     port: 9000,
     useSSL: false,
-    accessKey: 'talent',
-    secretKey: 'talent@168'
+    accessKey: '',
+    secretKey: ''
   }
 }
 export default {
