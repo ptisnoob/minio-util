@@ -134,6 +134,26 @@ async function downZIP(client, bucket, path, zipName, onGet) {
   saveAs(content, `${zipName}.zip`)
 }
 
+async function downZIP2(client, bucket, path, files, zipName, onGet) {
+  let zip = new JSZip()
+  for (let index = 0; index < files.length; index++) {
+    const i = files[index]
+    if (i.prefix) {
+      await getList(client, bucket, path + i.prefix, true, async (data) => {
+        const name = data.name.replace(path, '')
+        const blob = await getBlob(client, bucket, path, name)
+        zip.file(name, blob)
+      })
+    } else {
+      const blob = await getBlob(client, bucket, path, i.name)
+      zip.file(i.name, blob)
+    }
+    if (onGet) onGet({ name: i.name || i.prefix, index: index, size: files.length })
+  }
+  const content = await zip.generateAsync({ type: 'blob' })
+  saveAs(content, `${zipName}.zip`)
+}
+
 function getSub(name, prefix = '.') {
   let split = name.split(prefix)
   return split[split.length - 1].toLocaleLowerCase()
@@ -152,5 +172,6 @@ export default {
   createClient: createClient,
   getBuckets: getBuckets,
   getBlob: getBlob,
-  downZIP: downZIP
+  downZIP: downZIP,
+  downZIP2: downZIP2
 }

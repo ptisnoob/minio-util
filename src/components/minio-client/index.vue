@@ -353,7 +353,6 @@ export default {
       })
     },
     async downMenu(prefix, bucket) {
-      console.log('bucket', bucket)
       this.pageLoading = true
       this.loadingText = '正在压缩中...'
       // 判断是下载目录还是整个Bucket 因为右键的时候  active还是不是目标bucket  所以要区分一下
@@ -463,7 +462,13 @@ export default {
           })
           break
         case 'download':
-          this.$message.success('正在实现中...')
+          this.pageLoading = true
+          this.loadingText = '正在压缩中...'
+          await this.$minio.downZIP2(this.minioClient, this.activeBucket, this.currentPath, this.selectList, 'minio-files', (res) => {
+            this.loadingText = `正在压缩${res.name},进度${res.index}/${res.size}....`
+          })
+          this.pageLoading = false
+          this.$message.success('下载完成！')
           this.selectList = []
           break
         case 'copy':
