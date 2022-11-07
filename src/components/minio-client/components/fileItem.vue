@@ -58,6 +58,16 @@ export default {
       newName: ''
     }
   },
+  computed: {
+    bucket() {
+      const split = this.path.split('/')
+      return split[0]
+    },
+    currentPath() {
+      const split = this.path.split('/')
+      return split.slice(1).join('/')
+    }
+  },
   methods: {
     fileRightMenu(event) {
       this.$contextmenu({
@@ -131,16 +141,15 @@ export default {
           {
             label: '复制',
             onClick: () => {
-              const split = this.path.split('/')
               this.$store.dispatch('app/toggleClipboard', [
-                { item: this.n, bucket: split[0], path: split.slice(1).join('/'), client: this.minioClient, menu: true }
+                { item: this.n, bucket: this.bucket, path: this.currentPath, client: this.minioClient, menu: true }
               ])
               this.$message.success('复制成功')
             }
           },
           {
             label: '下载',
-            onClick: () => {
+            onClick:  () => {
               this.$emit('downLoadMenu')
             }
           }
@@ -228,25 +237,25 @@ export default {
   height: 100%;
 } */
 .file-item > .file > .img::after {
-    content: '点击查看大图';
-    position: absolute;
-    width: 100%;
-    height: 0%;
-    background-color: #000000c4;
-    z-index: 100;
-    left: 0;
-    color: #ffffff;
-    text-align: center;
-    top: 0;
-    pointer-events: none;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease-in-out;
+  content: '点击查看大图';
+  position: absolute;
+  width: 100%;
+  height: 0%;
+  background-color: #000000c4;
+  z-index: 100;
+  left: 0;
+  color: #ffffff;
+  text-align: center;
+  top: 0;
+  pointer-events: none;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-in-out;
 }
 .file-item > .file:hover > .img::after {
-    height: 100%;
+  height: 100%;
 }
 .file-item > .file > i {
   color: #869583;

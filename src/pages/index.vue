@@ -30,7 +30,7 @@
     </el-tabs>
 
     <el-dialog title="建立客户端连接" :visible.sync="dialogVisible">
-      <el-form :model="form" label-width="auto">
+      <el-form :model="form" label-width="80px">
         <el-form-item label="服务名称">
           <el-input v-model="form.title" placeholder="请填写服务名称"></el-input>
         </el-form-item>
@@ -168,13 +168,11 @@ export default {
       }
       return rlt
     },
-    syncSuccess(name) {
-      console.log('name: ' + name)
+    syncSuccess() {
       this.syncBtnText = ''
     },
     syncProgress(progress) {
       this.syncBtnText = progress
-      console.log('progress', progress)
     },
     closeSync() {
       this.syncDialogVisible = false

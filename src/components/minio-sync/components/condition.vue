@@ -1,5 +1,5 @@
 <template>
-  <el-form :model="conditionForm" label-width="auto">
+  <el-form :model="conditionForm" label-width="155px">
     <el-form-item label="文件名包含关键字：">
       <el-tag :key="tag" v-for="tag in conditionForm.key" closable :disable-transitions="false" @close="handleClose(tag, false)">
         {{ tag }}

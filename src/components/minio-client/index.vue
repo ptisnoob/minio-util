@@ -64,7 +64,7 @@
         :imgPreviewList="imgPreviewList"
         @selItem="selItem(n, index)"
         @delMenu="removeMenu(n.prefix)"
-        @downLoadMenu="downMenu(n.prefix)"
+        @downLoadMenu="downMenu(currentPath + n.prefix)"
         @showMenu="showMenu(n.prefix)"
         @delFile="removeFile(currentPath + n.name)"
         @rename="rename"
@@ -72,7 +72,7 @@
     </div>
 
     <el-dialog title="新建Bucket" :visible.sync="createBucketDialogVisible">
-      <el-form :model="createForm" label-width="auto">
+      <el-form :model="createForm" label-width="90px">
         <el-form-item label="Bucket名称">
           <el-input v-model="createForm.name" placeholder="请填写Bucket名称,不能包含中文！"></el-input>
         </el-form-item>
@@ -177,7 +177,6 @@ export default {
     init() {
       if (!this.option) return this.connectFailed()
       this.minioClient = this.$minio.createClient(this.option)
-      console.log('this.minioClient', this.minioClient)
       if (!this.minioClient) return this.connectFailed()
       this.$minio.getBuckets(this.minioClient).then((res) => {
         if (!res) return this.connectFailed()
@@ -278,6 +277,12 @@ export default {
             onClick: () => {
               this.removeBucket()
             }
+          },
+          {
+            label: '下载',
+            onClick: () => {
+              this.downMenu('', this.rightClickBucket.name)
+            }
           }
         ],
         event, // 鼠标事件信息
@@ -345,10 +350,18 @@ export default {
     removeMenuFiles(prefix) {
       return this.$minio.getList(this.minioClient, this.activeBucket, this.currentPath + prefix, true, (obj) => {
         this.removeFile(obj.name)
-        console.log('删除' + obj.name)
       })
     },
-    downMenu() {},
+    async downMenu(prefix, bucket) {
+      console.log('bucket', bucket)
+      this.pageLoading = true
+      this.loadingText = '正在压缩中...'
+      // 判断是下载目录还是整个Bucket 因为右键的时候  active还是不是目标bucket  所以要区分一下
+      await this.$minio.downZIP(this.minioClient, bucket || this.activeBucket, prefix, prefix || bucket, (res) => {
+        this.loadingText = `正在压缩${res.name},进度${res.index}/${res.size}....`
+      })
+      this.pageLoading = false
+    },
     removeFile(fileName) {
       return this.$minio.del(this.minioClient, this.activeBucket, '', fileName, () => {
         const index = this.files.findIndex((i) => i.name === fileName)
@@ -402,7 +415,6 @@ export default {
         fr.onload = async () => {
           //文件读取成功回调
           const dataUrl = Buffer.from(fr.result) // ArrayBuffer 转成 Buffer对象
-          console.log('dataUrl: ', typeof dataUrl)
           await this.putObject(item, dataUrl)
           this.$notify({
             title: '上传成功',
@@ -488,7 +500,9 @@ export default {
         .catch(() => {})
     },
     async paste() {
+      this.pageLoading = true
       for (let index = 0; index < this.clipboard.length; index++) {
+        this.loadingText = `正在粘贴第${index + 1}/${this.clipboard.length}项..请稍等`
         const c = this.clipboard[index]
         if (c.menu) {
           const exist = this.files.some((f) => f.prefix === c.item.prefix)
@@ -507,9 +521,9 @@ export default {
           }
           await this.pasteOne(c, c.item.name, newName, c.item.size)
           this.bucketFiles.push({ name: newName, sub: c.item.sub, size: c.item.size })
-          // this.refreshFiles()
         }
       }
+      this.pageLoading = false
       this.$message.success('粘贴成功...')
     },
     async pasteOne(c, fileName, newName, size) {

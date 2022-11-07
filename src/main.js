@@ -7,6 +7,10 @@ import store from './store'
 import '@/icons'
 import minio from '@/plugins/minio'
 import Contextmenu from 'vue-contextmenujs'
+
+// Vue.use(JSZip)
+// Vue.prototype.$JSZip = JSZip
+
 Vue.use(Contextmenu)
 
 Vue.use(ElementUI)
