@@ -87,8 +87,8 @@ const BaseForm = {
     endPoint: '127.0.0.1',
     port: 9000,
     useSSL: false,
-    accessKey: 'talent',
-    secretKey: 'talent@168'
+    accessKey: '',
+    secretKey: ''
   }
 }
 export default {
