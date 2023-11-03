@@ -1,20 +1,9 @@
 <template>
-  <div
-    class="client-box"
-    v-loading="pageLoading"
-    :element-loading-text="loadingText"
-    element-loading-spinner="el-icon-loading"
-    element-loading-background="rgba(0, 0, 0, 0.8)"
-  >
+  <div class="client-box" v-loading="pageLoading" :element-loading-text="loadingText"
+    element-loading-spinner="el-icon-loading" element-loading-background="rgba(0, 0, 0, 0.8)">
     <div class="bucket-box">
-      <div
-        :class="['bucket-item', { 'active-bucket': activeBucket === n.name }]"
-        v-for="(n, index) in buckets"
-        :key="index"
-        @click="selBucket(n.name)"
-        @click.right="rightClickBucket = n"
-        @contextmenu.prevent="onContextmenu"
-      >
+      <div :class="['bucket-item', { 'active-bucket': activeBucket === n.name }]" v-for="(n, index) in buckets"
+        :key="index" @click="selBucket(n.name)" @click.right="rightClickBucket = n" @contextmenu.prevent="onContextmenu">
         <span class="bucket-item-title"> {{ n.name }}</span>
       </div>
       <div class="bucket-item" @click="createBucketDialogVisible = true && !isConnectFailed">
@@ -37,12 +26,15 @@
           <el-button type="primary" @click="back">返回</el-button>
         </el-form-item> -->
         <el-form-item class="tj-data">
-          总数: <span>{{ bucketFiles.length }}</span> ,文件数量:<span>{{ bucketFiles.filter((i) => i.name !== undefined).length }}</span>
+          总数: <span>{{ bucketFiles.length }}</span> ,文件数量:<span>{{ bucketFiles.filter((i) => i.name !== undefined).length
+          }}</span>
           ,目录数量:<span>{{ bucketFiles.filter((i) => i.name === undefined).length }}</span>
         </el-form-item>
         <el-form-item style="float: right">
           <el-button type="primary" v-show="clipboard.length > 0" plain @click="paste">粘贴</el-button>
-          <el-button type="primary" @click="refreshFiles">刷新数据</el-button>
+          <el-button type="primary" @click="chooseFile(false)">上传文件</el-button>
+          <el-button type="primary" @click="chooseFile(true)">上传目录</el-button>
+          <el-button type="primary" @click="refreshFiles">刷新</el-button>
           <el-button type="primary" v-show="currentPath !== ''" @click="back">返回</el-button>
         </el-form-item>
       </el-form>
@@ -51,26 +43,14 @@
       当前路径：<span> {{ activeBucket }}</span> / <span>{{ currentPath }}</span>
     </div>
     <div :class="['file-box', { 'drop-file-ing': dropFileIng, 'show-select': showSelect }]" :id="randomId">
-      <el-empty v-if="bucketFiles.length === 0" style="flex: 1"> </el-empty>
-      <file-item
-        v-else
-        :class="{ 'is-select': selectList.indexOf(n) > -1 }"
-        v-for="(n, index) in bucketFiles"
-        :key="index"
-        :host="host"
-        :path="path"
-        :n="n"
-        :minioClient="minioClient"
-        :imgPreviewList="imgPreviewList"
-        @selItem="selItem(n, index)"
-        @delMenu="removeMenu(n.prefix)"
-        @downLoadMenu="downMenu(currentPath + n.prefix)"
-        @showMenu="showMenu(n.prefix)"
-        @delFile="removeFile(currentPath + n.name)"
-        @rename="rename"
-      ></file-item>
+      <el-empty v-if="bucketFiles.length === 0"> </el-empty>
+      <file-item v-else :class="{ 'is-select': selectList.indexOf(n) > -1 }" v-for="(n, index) in bucketFiles"
+        :key="index" :host="host" :path="path" :n="n" :minioClient="minioClient" :imgPreviewList="imgPreviewList"
+        @selItem="selItem(n, index)" @delMenu="removeMenu(n.prefix)" @downLoadMenu="downMenu(currentPath + n.prefix)"
+        @showMenu="showMenu(n.prefix)" @delFile="removeFile(currentPath + n.name)" @rename="rename"></file-item>
     </div>
-
+    <input type="file" ref="fileInput" style="display: none" multiple :webkitdirectory="isDir"
+      @change="onFileInputChange" />
     <el-dialog title="新建Bucket" :visible.sync="createBucketDialogVisible">
       <el-form :model="createForm" label-width="90px">
         <el-form-item label="Bucket名称">
@@ -164,6 +144,7 @@ export default {
         name: '',
         policy: 'public'
       },
+      isDir: false,
       bucketPolicy,
       files: [],
       dropFileIng: false,
@@ -185,6 +166,19 @@ export default {
         if (this.buckets.length > 0) this.selBucket(this.buckets[0].name)
         this.initDragUpload()
       })
+    },
+    chooseFile(isDir) {
+      this.isDir = isDir;
+      this.$nextTick(() => {
+        this.$refs.fileInput.click();
+      });
+    },
+    onFileInputChange(event) {
+      // 获取选择的文件信息
+      const selectedFile = Array.from(event.target.files);
+      console.log('selectedFile', selectedFile)
+      this.uploadFileList(selectedFile)
+
     },
     connectFailed() {
       // this.isConnectFailed = true
@@ -315,19 +309,19 @@ export default {
           policy === 'private'
             ? []
             : [
-                {
-                  Effect: 'Allow',
-                  Principal: { AWS: ['*'] },
-                  Action: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
-                  Resource: ['arn:aws:s3:::' + name]
-                },
-                {
-                  Effect: 'Allow',
-                  Principal: { AWS: ['*'] },
-                  Action: ['s3:AbortMultipartUpload', 's3:DeleteObject', 's3:GetObject', 's3:ListMultipartUploadParts', 's3:PutObject'],
-                  Resource: ['arn:aws:s3:::' + name + '/*']
-                }
-              ]
+              {
+                Effect: 'Allow',
+                Principal: { AWS: ['*'] },
+                Action: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
+                Resource: ['arn:aws:s3:::' + name]
+              },
+              {
+                Effect: 'Allow',
+                Principal: { AWS: ['*'] },
+                Action: ['s3:AbortMultipartUpload', 's3:DeleteObject', 's3:GetObject', 's3:ListMultipartUploadParts', 's3:PutObject'],
+                Resource: ['arn:aws:s3:::' + name + '/*']
+              }
+            ]
       }
       const err = await this.minioClient.setBucketPolicy(name, JSON.stringify(template))
       if (err) console.log('err', err)
@@ -345,7 +339,7 @@ export default {
           this.$message.success('删除目录成功！')
           this.back()
         })
-        .catch(() => {})
+        .catch(() => { })
     },
     removeMenuFiles(prefix) {
       return this.$minio.getList(this.minioClient, this.activeBucket, this.currentPath + prefix, true, (obj) => {
@@ -405,28 +399,45 @@ export default {
       this.dropFileIng = false
       e.stopPropagation()
       e.preventDefault() //必填字段
-      this.pageLoading = true
       let fileData = e.dataTransfer.files
-      for (let i = 0; i !== fileData.length; i++) {
-        const item = fileData[i]
-        const fr = new FileReader()
-        fr.readAsArrayBuffer(item) //读取文件内容,读取完成,result 属性中保存的将是被读取文件的 ArrayBuffer 数据对象.
-        fr.onload = async () => {
-          //文件读取成功回调
-          const dataUrl = Buffer.from(fr.result) // ArrayBuffer 转成 Buffer对象
-          await this.putObject(item, dataUrl)
-          this.$notify({
-            title: '上传成功',
-            message: `${item.name} 上传成功！`,
-            type: 'success'
-          })
-          this.refreshFiles()
-          this.pageLoading = false
-        }
+      this.uploadFileList(fileData)
+    },
+    async uploadFileList(list) {
+      this.pageLoading = true
+      for (let i = 0; i !== list.length; i++) {
+        const item = list[i]
+        this.loadingText = `正在上传${item.webkitRelativePath || item.name},进度${i + 1}/${list.length}...`
+        console.log('item', item)
+        let res = await this.uploadFile(item)
+        this.$notify({
+          title: res ? '上传成功' : '上传失败',
+          message: `${item.name} ${res ? '上传成功' : '上传失败'}`,
+          type: res ? 'success' : 'error'
+        })
       }
+      this.loadingText = '加载中'
+      this.refreshFiles()
+      this.pageLoading = false
+    },
+    uploadFile(item) {
+      return new Promise(resolve => {
+        try {
+          const fr = new FileReader()
+          fr.readAsArrayBuffer(item) //读取文件内容,读取完成,result 属性中保存的将是被读取文件的 ArrayBuffer 数据对象.
+          fr.onload = async () => {
+            //文件读取成功回调
+            const dataUrl = Buffer.from(fr.result) // ArrayBuffer 转成 Buffer对象
+            await this.putObject(item, dataUrl)
+            resolve(true)
+          }
+        } catch (err) {
+          console.log('文件处理失败', err)
+          resolve(false)
+        }
+      })
     },
     putObject(item, dataUrl) {
-      return this.$minio.put(this.minioClient, this.activeBucket, this.currentPath, item.name, dataUrl, item.size, item.type)
+      return this.$minio.put(this.minioClient, this.activeBucket, this.currentPath, item.webkitRelativePath || item.name, dataUrl, item.size, item.type)
     },
     selItem(n, end) {
       if (this.showSelect) {
@@ -502,7 +513,7 @@ export default {
           await this.removeFile(old)
           this.refreshFiles()
         })
-        .catch(() => {})
+        .catch(() => { })
     },
     async paste() {
       this.pageLoading = true
@@ -550,10 +561,12 @@ export default {
 .color-primary {
   color: #66b1ff;
 }
+
 .bucket-box {
   display: flex;
   /* flex-wrap: wrap; */
 }
+
 .bucket-item {
   width: 23%;
   /* padding: 0 10px; */
@@ -569,16 +582,22 @@ export default {
   user-select: none;
   transition: all 0.3s ease-in-out;
 }
-.bucket-item > .bucket-item-title {
+
+.bucket-item>.bucket-item-title {
   transition: all 0.3s ease-in-out;
   font-size: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
+
 .bucket-item:hover,
 .active-bucket {
   background-color: aliceblue;
 }
-.bucket-item:hover > .bucket-item-title,
-.active-bucket > .bucket-item-title {
+
+.bucket-item:hover>.bucket-item-title,
+.active-bucket>.bucket-item-title {
   font-size: 30px;
 }
 
@@ -588,15 +607,18 @@ export default {
   color: #333333;
   font-weight: 600;
 }
+
 .tool-box .tj-data {
   margin-right: 10px;
   float: right;
 }
+
 .tool-box .tj-data span {
   color: #2196f3;
   font-weight: 600;
   font-size: 18px;
 }
+
 .file-box {
   display: flex;
   flex-wrap: wrap;
@@ -604,6 +626,11 @@ export default {
   overflow: auto;
   transition: all 0.3s ease-in-out;
   position: relative;
+
+  .el-empty {
+    margin: 0 auto;
+  }
+
 }
 
 .drop-file-ing.file-box::after {
@@ -639,14 +666,17 @@ export default {
   font-size: 18px;
   overflow: hidden;
 }
+
 .show.multiple-choice-box {
   /* width: 100%; */
   height: 100%;
 }
+
 .show.multiple-choice-box .content {
   top: 150px;
   /* left: unset; */
 }
+
 .multiple-choice-box .content {
   width: 300px;
   transition: all 0.3s ease-in-out;
@@ -660,6 +690,7 @@ export default {
   /* left: -100%; */
   /* top: 150px; */
 }
+
 .multiple-choice-box .content .el-icon-close {
   position: absolute;
   right: 10px;

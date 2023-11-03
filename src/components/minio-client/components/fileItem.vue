@@ -246,7 +246,7 @@ export default {
   left: 0;
   color: #ffffff;
   text-align: center;
-  top: 0;
+  top: -20px;
   pointer-events: none;
   font-size: 14px;
   display: flex;
@@ -256,6 +256,7 @@ export default {
 }
 .file-item > .file:hover > .img::after {
   height: 100%;
+  top: 0;
 }
 .file-item > .file > i {
   color: #869583;
