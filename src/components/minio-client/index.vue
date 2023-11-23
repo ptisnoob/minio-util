@@ -427,6 +427,7 @@ export default {
           fr.onload = async () => {
             //文件读取成功回调
             const dataUrl = Buffer.from(fr.result) // ArrayBuffer 转成 Buffer对象
+            console.log('item',item)
             await this.putObject(item, dataUrl)
             resolve(true)
           }

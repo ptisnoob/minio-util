@@ -3,6 +3,7 @@
 ## 介绍
 Minio文件服务器的管理端，纯VUE实现。
 预览地址：https://ptisnoob.github.io/minio-util/minio/
+
 ### 已实现功能
 ```
 1、多窗口管理
@@ -14,6 +15,7 @@ Minio文件服务器的管理端，纯VUE实现。
 7、高灵活性，跨client数据迁移
 8、目录的新增、删除、打包下载
 9、文件的预览（图片）、重命名
+10、目录上传
 ```
 
 ### 待实现的功能：
@@ -26,13 +28,43 @@ Minio文件服务器的管理端，纯VUE实现。
 
 ## 运行
 
+- `npm`
+
 ```
 1、npm install
 2、npm run dev
 ```
 
+- `pnpm（推荐）`
+
+```
+1、pnpm i
+2、pnpm  dev
+```
+
+## 
+
 ## 打包
+
+- `npm`
 
 ```
 npm run build
 ```
+
+- `pnpm(推荐)`
+
+```
+pnpm build
+```
+
+## 预览
+
+![预览](.\src\assets\example\1.png)
+![预览](.\src\assets\example\2.png)
+![预览](.\src\assets\example\3.png)
+![预览](.\src\assets\example\4.png)
+![预览](.\src\assets\example\5.png)
+![预览](.\src\assets\example\6.png)
+![预览](.\src\assets\example\7.png)
+![预览](.\src\assets\example\8.png)
