@@ -60,11 +60,11 @@ pnpm build
 
 ## 预览
 
-![预览](.\src\assets\example\1.png)
-![预览](.\src\assets\example\2.png)
-![预览](.\src\assets\example\3.png)
-![预览](.\src\assets\example\4.png)
-![预览](.\src\assets\example\5.png)
-![预览](.\src\assets\example\6.png)
-![预览](.\src\assets\example\7.png)
-![预览](.\src\assets\example\8.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/1.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/2.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/3.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/4.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/5.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/6.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/7.png)
+![预览](https://github.com/ptisnoob/minio-util/blob/3356ae6e712b1981d33171edd1055955684807b3/src/assets/example/8.png)
